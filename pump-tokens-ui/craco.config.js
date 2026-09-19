@@ -16,7 +16,8 @@ module.exports = {
         "os": require.resolve("os-browserify/browser"),
         "path": require.resolve("path-browserify"),
         "zlib": require.resolve("browserify-zlib"),
-        "util": require.resolve("util/")
+        "util": require.resolve("util/"),
+        "vm": require.resolve("vm-browserify")
       };
 
       // Add plugins
