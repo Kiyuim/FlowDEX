@@ -385,15 +385,23 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
 
     try {
       const now = Math.floor(Date.now() / 1000);
-      const oneDayAgo = now - (24 * 60 * 60); // 24 hours ago
+      // Lookback window scales with candle size so wider intervals actually
+      // show multiple days of history instead of always requesting the same
+      // last-24h window (which, at 1d granularity, could only ever return
+      // ~1 candle no matter how much history the backend actually had).
+      const INTERVAL_SECONDS = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '12h': 43200, '1d': 86400 };
+      const intervalSeconds = INTERVAL_SECONDS[selectedInterval] || 3600;
+      const limit = 100;
+      const lookbackSeconds = intervalSeconds * limit;
+      const fromTimestamp = now - lookbackSeconds;
 
       const params = new URLSearchParams({
         chain_id: 100000,
         pair_address: token.pairAddress,
         interval: selectedInterval,
-        from_timestamp: oneDayAgo,
+        from_timestamp: fromTimestamp,
         to_timestamp: now,
-        limit: 100,
+        limit,
       });
 
       const response = await fetch(`${API_URL}/v1/market/get_candlestick?${params}`, {

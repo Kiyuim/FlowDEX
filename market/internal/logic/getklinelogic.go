@@ -41,13 +41,29 @@ var klineSingleLight = new(singleflight.Group)
 // Get K-line data
 func (l *GetKlineLogic) GetKline(in *market.GetKlineRequest) (*marketclient.GetKlineResponse, error) {
 	fmt.Println("input is:", in)
+	// Honor the caller's actual window/limit — this used to hardcode the
+	// last 24h and limit=100 regardless of what was requested, so e.g. a 1d
+	// interval could only ever return ~1 candle no matter how much history
+	// existed. Only fall back to defaults when the caller didn't specify.
+	fromTimestamp := in.FromTimestamp
+	toTimestamp := in.ToTimestamp
+	limit := in.Limit
+	if toTimestamp <= 0 {
+		toTimestamp = time.Now().Unix()
+	}
+	if fromTimestamp <= 0 {
+		fromTimestamp = time.Now().Add(-24 * time.Hour).Unix()
+	}
+	if limit <= 0 {
+		limit = 100
+	}
 	input := &market.GetKlineRequest{
 		ChainId:       in.ChainId,
 		PairAddress:   in.PairAddress,
 		Interval:      in.Interval,
-		FromTimestamp: time.Now().Add(-24 * time.Hour).Unix(), // Jan 1, 2024 00:00:00 UTC
-		ToTimestamp:   time.Now().Unix(),                      // Jan 2, 2024 00:00:00 UTC
-		Limit:         100,
+		FromTimestamp: fromTimestamp,
+		ToTimestamp:   toTimestamp,
+		Limit:         limit,
 	}
 	klines, err := l.doChanGetKlineData(l.ctx, klineSingleLight, input)
 	if err != nil {
