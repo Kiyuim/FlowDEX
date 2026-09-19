@@ -26,7 +26,7 @@ Sol:
   UUID: "e322635ed37c12a203af5f1e845278f26c2d46ca"
 
 market_service:
-  target: market.railway.internal:8080  # separate Railway service (private domain)
+  target: localhost:8080  # bundled in the same container (see start-backend.sh)
   nonblock: true
   timeout: 100000  # 3 seconds timeout
   transport: tcp
@@ -45,16 +45,16 @@ market_service:
 Mysql:
   # Railway-internal MySQL (private network). Fresh devnet database.
   User: root
-  Password: fundexf97b8b8804661555
+  Password: NysvuawxpJtktXQwoAhrjHhXcfTdgGQJ
   Host: mysql.railway.internal
   Port: 3306
-  DBname: fun_dexs
+  DBname: railway
 
 
 Redis:
-  # Railway-internal Redis (private network, no auth).
+  # Railway-internal Redis (private network).
   Host: redis.railway.internal:6379
-  Pass: ""
+  Pass: lDyOBdVLkQXuGWjjzefdYLIaFvvmBtsw
   Type: node
   Key: bizRedis
   PingTimeout: 10s

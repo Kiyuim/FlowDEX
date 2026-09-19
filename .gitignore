@@ -47,3 +47,4 @@ DEPLOY-devnet.md
 # explicitly approved to stay in-repo. If this repo is ever made public,
 # revisit this — but don't gitignore them again without also fixing how
 # Railway gets its config.
+.claude/

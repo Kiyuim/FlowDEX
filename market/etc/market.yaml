@@ -20,17 +20,17 @@ Mysql:
   Master:
     # Railway-internal MySQL (private network). Fresh devnet database.
     Username: root
-    Password: fundexf97b8b8804661555
+    Password: NysvuawxpJtktXQwoAhrjHhXcfTdgGQJ
     Path: mysql.railway.internal
     Port: 3306
-    DBname: fun_dexs
+    DBname: railway
 
 
 BizRedis:
   # Railway-internal Redis (private network). consumer publishes token/kline
-  # updates here; websocket subscribes. No auth (bare Railway redis service).
+  # updates here; websocket subscribes.
   Host: redis.railway.internal:6379
-  Pass: ""
+  Pass: lDyOBdVLkQXuGWjjzefdYLIaFvvmBtsw
   Type: node
   Key: bizRedis
   PingTimeout: 10s
@@ -39,7 +39,7 @@ BizRedis:
 KqSolTrades:
   Name: web3fun-kafka
   Brokers:
-    - 115.159.107.189:9093
+    - 165.154.4.230:9093
   Group: web3-dex-fix-2025-market-fresh-1771645175  # 使用时间戳确保全新的 group，避免 offset 冲突
   Topic: web3fun
   Offset: first  # 从头开始消费
