@@ -5,7 +5,7 @@ const Header = () => {
   return (
     <header className="header">
       <div className="logo">
-        🐸 GMGN
+        🌊 FlowDEX
       </div>
       
       <nav className="nav-tabs">
