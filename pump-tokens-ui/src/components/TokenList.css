@@ -311,7 +311,10 @@
 
 .token-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  /* Must be >= .token-card's min-width (420px, TokenCard.css) — a narrower
+     grid column here forces cards to overflow their own grid cell since
+     grid items don't shrink below their content's min-width by default. */
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
   gap: 16px;
   padding: 16px 0;
 }

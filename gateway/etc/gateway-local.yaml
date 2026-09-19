@@ -85,6 +85,15 @@ Upstreams: # upstreams
       - Method: get
         Path: /v1/market/get_candlestick
         RpcPath: market.Market/GetKline
+      - Method: get
+        Path: /v1/market/user_tokens
+        RpcPath: market.Market/GetUserTokens
+      - Method: get
+        Path: /v1/market/user_pools
+        RpcPath: market.Market/GetUserPools
+      - Method: post
+        Path: /v1/market/record_user_asset
+        RpcPath: market.Market/RecordUserAsset
 
 
 
@@ -93,5 +102,8 @@ whitelist:
     - /v1/market/index_pump
     - /v1/market/index_clmm
     - /v1/market/get_candlestick
+    - /v1/market/user_tokens
+    - /v1/market/user_pools
+    - /v1/market/record_user_asset
     - /v1/trade/create_limit_order
     - /v1/trade/create_market_order

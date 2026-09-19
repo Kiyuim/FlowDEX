@@ -16,7 +16,6 @@ const TokenCard = ({ token, status = 'new', onTokenSelect, isRealtime = false })
     return num.toString();
   };
 
-  // Format price (no price in API, so always $0.00)
   const formatPrice = (price) => {
     if (!price || isNaN(price)) return '0.00';
     if (price < 0.001) {
@@ -113,7 +112,7 @@ const TokenCard = ({ token, status = 'new', onTokenSelect, isRealtime = false })
         <div className="token-metrics">
           <div className="metric">
             <span className="metric-label">PRICE</span>
-            <span className="metric-value price">$0.00</span>
+            <span className="metric-value price">${formatPrice(token.price)}</span>
           </div>
           <div className="metric">
             <span className="metric-label">MC</span>

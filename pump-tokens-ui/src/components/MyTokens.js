@@ -38,7 +38,7 @@ const MyTokens = ({ onTokenSelect }) => {
       }
       
       const data = await response.json();
-      if (data?.code === 0 && data?.data?.list) {
+      if (data?.code === 10000 && data?.data?.list) {
         // Transform the response to match the expected format
         const transformedTokens = data.data.list.map(token => ({
           id: token.id,

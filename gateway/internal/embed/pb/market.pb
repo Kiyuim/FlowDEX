@@ -1,6 +1,6 @@
 
-ç™
-market/market.protomarket"á
+°π
+market.protomarket"á
 Kline
 chain_id (RchainId
 interval (	Rinterval
@@ -156,10 +156,11 @@ pumpStatus
 sortedType'
 honeypot_filter (	RhoneypotFilter
 page_no (RpageNo
-	page_size (RpageSize"[
+	page_size (RpageSize"
 GetPumpTokenListResponse)
 list (2.market.PumpTokenItemRlist
-total (Rtotal"Í
+total (Rtotal"
+sol_price_usd (RsolPriceUsd"ö
 PumpTokenItem
 chain_id (RchainId
 
@@ -181,17 +182,22 @@ hold_count (R	holdCount
 twitter_username (	RtwitterUsername
 telegram (	Rtelegram
 change24 (Rchange24!
-pair_address (	RpairAddress"≠
+pair_address (	RpairAddress
+price (Rprice
+program (	Rprogram"Ã
 GetClmmPoolListRequest
 chain_id (RchainId!
 pool_version (RpoolVersion
 sorted_type (	R
 sortedType
 page_no (RpageNo
-	page_size (RpageSize"Y
+	page_size (RpageSize
+
+pool_state (	R	poolState"}
 GetClmmPoolListResponse(
 list (2.market.ClmmPoolItemRlist
-total (Rtotal"ƒ
+total (Rtotal"
+sol_price_usd (RsolPriceUsd"⁄
 ClmmPoolItem
 chain_id (RchainId
 
@@ -212,7 +218,8 @@ launchTime#
 txs_24h (Rtxs24h
 vol_24h (Rvol24h
 apr (Rapr!
-pool_version (RpoolVersion"N
+pool_version (RpoolVersion
+price (Rprice"N
 GetPairInfoByTokensResponse/
 
 token_info (2.market.PairInfoR	tokenInfo"∫
@@ -682,7 +689,64 @@ start_time (R	startTime
 freeze_authority (	RfreezeAuthority.
 mint_authority_safe (RmintAuthoritySafe2
 freeze_authority_safe (RfreezeAuthoritySafe)
-security_summary	 (	RsecuritySummary"Q
+security_summary	 (	RsecuritySummary"X
+GetUserTokensRequest
+chain_id (RchainId%
+wallet_address (	RwalletAddress"X
+GetUserTokensResponse)
+list (2.market.UserTokenItemRlist
+total (Rtotal"∞
+UserTokenItem
+id (Rid#
+token_address (	RtokenAddress
+
+token_name (	R	tokenName!
+token_symbol (	RtokenSymbol
+
+token_icon (	R	tokenIcon%
+token_decimals (RtokenDecimals!
+token_supply (	RtokenSupply 
+description (	Rdescription
+
+created_at	 (R	createdAt"W
+GetUserPoolsRequest
+chain_id (RchainId%
+wallet_address (	RwalletAddress"V
+GetUserPoolsResponse(
+list (2.market.UserPoolItemRlist
+total (Rtotal"ø
+UserPoolItem
+id (Rid
+
+pool_state (	R	poolState(
+input_vault_mint (	RinputVaultMint*
+output_vault_mint (	RoutputVaultMint#
+token0_symbol (	Rtoken0Symbol#
+token1_symbol (	Rtoken1Symbol$
+trade_fee_rate (RtradeFeeRate
+	pool_type (	RpoolType
+
+created_at	 (R	createdAt"Ô
+RecordUserAssetRequest
+chain_id (RchainId%
+wallet_address (	RwalletAddress
+
+asset_type (	R	assetType
+
+asset_name (	R	assetName!
+asset_symbol (	RassetSymbol#
+asset_address (	RassetAddress
+decimals (Rdecimals!
+total_supply (	RtotalSupply%
+token0_address	 (	Rtoken0Address%
+token1_address
+ (	Rtoken1Address#
+token0_symbol (	Rtoken0Symbol#
+token1_symbol (	Rtoken1Symbol
+	pool_type (	RpoolType
+fee_tier (RfeeTier"3
+RecordUserAssetResponse
+success (Rsuccess"Q
 GetTop10Request
 chain_id (RchainId#
 token_address (	RtokenAddress"(
@@ -757,7 +821,7 @@ quickIntel
 Status
 UNKNOWN 	
 FALSE
-TRUE2•
+TRUE2í
 MarketU
 GetPumpTokenList.market.GetPumpTokenListRequest .market.GetPumpTokenListResponseR
 GetClmmPoolList.market.GetClmmPoolListRequest.market.GetClmmPoolListResponse=
@@ -766,5 +830,8 @@ quickIntel
 GetNativeTokenPrice".market.GetNativeTokenPriceRequest#.market.GetNativeTokenPriceResponseL
 PushTokenInfo.market.PushTokenInfoRequest.market.PushTokenInfoResponseI
 GetTokenInfo.market.GetTokenInfoRequest.market.GetTokenInfoResponse[
-TokenSecurityCheck!.market.TokenSecurityCheckRequest".market.TokenSecurityCheckResponseB
+TokenSecurityCheck!.market.TokenSecurityCheckRequest".market.TokenSecurityCheckResponseL
+GetUserTokens.market.GetUserTokensRequest.market.GetUserTokensResponseI
+GetUserPools.market.GetUserPoolsRequest.market.GetUserPoolsResponseR
+RecordUserAsset.market.RecordUserAssetRequest.market.RecordUserAssetResponseB
 Z./marketbproto3

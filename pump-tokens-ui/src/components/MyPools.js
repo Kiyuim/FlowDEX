@@ -38,7 +38,7 @@ const MyPools = ({ onPoolSelect }) => {
       }
       
       const data = await response.json();
-      if (data?.code === 0 && data?.data?.list) {
+      if (data?.code === 10000 && data?.data?.list) {
         // Transform the response to match the expected format
         const transformedPools = data.data.list.map(pool => ({
           id: pool.id,

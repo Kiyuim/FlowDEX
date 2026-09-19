@@ -10,6 +10,7 @@ import (
 	"dex/market/market"
 	"dex/model/solmodel"
 	"dex/pkg/chain"
+	"dex/pkg/solprice"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -36,6 +37,7 @@ func (l *GetPumpTokenListLogic) GetPumpTokenList(in *market.GetPumpTokenListRequ
 	pairModel := solmodel.NewPairModel(l.svcCtx.DB)
 	redisClient := l.svcCtx.RDS
 	pairCacheKey := fmt.Sprint("pump-token-list-", in.PumpStatus)
+	solPriceUsd := solprice.GetSolUsdPrice()
 
 	//list
 	fmt.Println("pairCacheKey is:", pairCacheKey)
@@ -51,8 +53,9 @@ func (l *GetPumpTokenListLogic) GetPumpTokenList(in *market.GetPumpTokenListRequ
 
 		fmt.Println("resultList length is:", len(resultList))
 		return &market.GetPumpTokenListResponse{
-			List:  resultList,
-			Total: int32(len(resultList)),
+			List:        resultList,
+			Total:       int32(len(resultList)),
+			SolPriceUsd: solPriceUsd,
 		}, nil
 	} else {
 		in.PageNo = 1
@@ -113,11 +116,12 @@ func (l *GetPumpTokenListLogic) GetPumpTokenList(in *market.GetPumpTokenListRequ
 		list := make([]*market.PumpTokenItem, 0)
 		for _, pair := range pairList {
 			token := tokenMap[pair.TokenAddress]
-			var tokenIcon, twitterUsername, telegram string
+			var tokenIcon, twitterUsername, telegram, program string
 			if token != nil {
 				tokenIcon = token.Icon
 				twitterUsername = token.TwitterUsername
 				telegram = token.Telegram
+				program = token.Program
 			}
 
 			item := &market.PumpTokenItem{
@@ -133,11 +137,13 @@ func (l *GetPumpTokenListLogic) GetPumpTokenList(in *market.GetPumpTokenListRequ
 				DomesticProgress: pair.PumpPoint,
 				TwitterUsername:  twitterUsername,
 				Telegram:         telegram,
+				Program:          program,
 			}
 
 			if stats, ok := statsMap[pair.Address]; ok {
 				item.Txs_24H = stats.Txs
 				item.Vol_24H = stats.Vol
+				item.Price = stats.LastPrice
 				if stats.FirstPrice > 0 {
 					item.Change24 = (stats.LastPrice - stats.FirstPrice) / stats.FirstPrice * 100
 				}
@@ -169,8 +175,9 @@ func (l *GetPumpTokenListLogic) GetPumpTokenList(in *market.GetPumpTokenListRequ
 		}
 
 		return &market.GetPumpTokenListResponse{
-			List:  list,
-			Total: 50,
+			List:        list,
+			Total:       50,
+			SolPriceUsd: solPriceUsd,
 		}, nil
 	}
 }

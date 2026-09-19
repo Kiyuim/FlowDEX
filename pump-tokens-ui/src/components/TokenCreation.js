@@ -18,6 +18,10 @@ import {
 } from '@solana/spl-token';
 import './TokenCreation.css';
 
+const API_BASE_URL = process.env.NODE_ENV === 'development'
+  ? '' // Use proxy in development
+  : '/direct-api'; // Use Nginx proxy in production (via /direct-api)
+
 // Standard sizes for SPL Token accounts
 const MINT_SIZE = 82; // Size of a mint account in bytes
 
@@ -211,6 +215,24 @@ const TokenCreation = () => {
         setSuccess('Token created successfully!');
         setTxSignature(txid);
         setTokenMint(mintKeypair.publicKey.toString());
+
+        // Best-effort attribution for the Portfolio tab — token creation is
+        // entirely client-side, so the backend has no way to know this
+        // happened unless we tell it. Never block the create flow on this.
+        fetch(`${API_BASE_URL}/v1/market/record_user_asset`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chain_id: 100000,
+            wallet_address: publicKey.toString(),
+            asset_type: 'token',
+            asset_name: formData.name,
+            asset_symbol: formData.symbol,
+            asset_address: mintKeypair.publicKey.toString(),
+            decimals: formData.decimals,
+            total_supply: String(formData.supply),
+          }),
+        }).catch(err => console.warn('⚠️ Failed to record token in Portfolio:', err));
       } catch (err) {
         console.error('❌ Error signing/sending transaction:', err);
         throw new Error(`Failed to sign or send transaction: ${err.message}`);

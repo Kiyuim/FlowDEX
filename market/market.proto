@@ -170,6 +170,7 @@ message GetPumpTokenListRequest {
 message GetPumpTokenListResponse {
   repeated PumpTokenItem list = 1;
   int32 total = 2;
+  double sol_price_usd = 3; // Real-world SOL/USD price (pkg/solprice), not derived from seed/demo data
 }
 
 message PumpTokenItem {
@@ -188,6 +189,8 @@ message PumpTokenItem {
   string telegram = 13;
   double change24 = 14;
   string pair_address = 15;
+  double price = 16; // Last real trade price (USD), from the trade table
+  string program = 17; // Originating program (e.g. pump.fun) — backs the Sources view
 }
 
 // GetClmmPoolList
@@ -197,10 +200,12 @@ message GetClmmPoolListRequest {
   string sorted_type = 3;
   int32 page_no = 4;
   int32 page_size = 5;
+  string pool_state = 6; // Optional: look up one specific pool by address (searches both versions)
 }
 message GetClmmPoolListResponse {
   repeated ClmmPoolItem list = 1;
   int32 total = 2;
+  double sol_price_usd = 3; // Real-world SOL/USD price (pkg/solprice), not derived from seed/demo data
 }
 
 message ClmmPoolItem {
@@ -220,6 +225,7 @@ message ClmmPoolItem {
   double vol_24h = 14;            // 24h volume
   double apr = 15;                // Annual percentage rate
   int32 pool_version = 16;        // 1 for v1, 2 for v2
+  double price = 17;              // Last real trade price (USD) of the output token
 }
 
 message GetPairInfoByTokensResponse {
@@ -792,6 +798,79 @@ service Market {
   rpc PushTokenInfo(PushTokenInfoRequest) returns (PushTokenInfoResponse);
   rpc GetTokenInfo(GetTokenInfoRequest) returns (GetTokenInfoResponse);
   rpc TokenSecurityCheck(TokenSecurityCheckRequest) returns (TokenSecurityCheckResponse);
+  rpc GetUserTokens(GetUserTokensRequest) returns (GetUserTokensResponse);
+  rpc GetUserPools(GetUserPoolsRequest) returns (GetUserPoolsResponse);
+  rpc RecordUserAsset(RecordUserAssetRequest) returns (RecordUserAssetResponse);
+}
+
+// Portfolio: tokens/pools a wallet created through this app. Token creation
+// is client-side (no backend call), so the frontend must call
+// RecordUserAsset itself right after a successful on-chain create — this is
+// attribution bookkeeping only, not something the chain tells us on its own.
+
+message GetUserTokensRequest {
+  int64 chain_id = 1;
+  string wallet_address = 2;
+}
+
+message GetUserTokensResponse {
+  repeated UserTokenItem list = 1;
+  int32 total = 2;
+}
+
+message UserTokenItem {
+  int64 id = 1;
+  string token_address = 2;
+  string token_name = 3;
+  string token_symbol = 4;
+  string token_icon = 5;
+  int32 token_decimals = 6;
+  string token_supply = 7;
+  string description = 8;
+  int64 created_at = 9;
+}
+
+message GetUserPoolsRequest {
+  int64 chain_id = 1;
+  string wallet_address = 2;
+}
+
+message GetUserPoolsResponse {
+  repeated UserPoolItem list = 1;
+  int32 total = 2;
+}
+
+message UserPoolItem {
+  int64 id = 1;
+  string pool_state = 2;
+  string input_vault_mint = 3;
+  string output_vault_mint = 4;
+  string token0_symbol = 5;
+  string token1_symbol = 6;
+  int64 trade_fee_rate = 7;
+  string pool_type = 8;
+  int64 created_at = 9;
+}
+
+message RecordUserAssetRequest {
+  int64 chain_id = 1;
+  string wallet_address = 2;
+  string asset_type = 3;   // "token" or "pool"
+  string asset_name = 4;
+  string asset_symbol = 5;
+  string asset_address = 6;
+  int32 decimals = 7;          // token only
+  string total_supply = 8;     // token only
+  string token0_address = 9;   // pool only
+  string token1_address = 10;  // pool only
+  string token0_symbol = 11;   // pool only
+  string token1_symbol = 12;   // pool only
+  string pool_type = 13;       // pool only
+  int32 fee_tier = 14;         // pool only
+}
+
+message RecordUserAssetResponse {
+  bool success = 1;
 }
 
 message GetTop10Request{

@@ -62,3 +62,18 @@ func (s *MarketServer) TokenSecurityCheck(ctx context.Context, in *market.TokenS
 	l := logic.NewTokenSecurityCheckLogic(ctx)
 	return l.TokenSecurityCheck(in)
 }
+
+func (s *MarketServer) GetUserTokens(ctx context.Context, in *market.GetUserTokensRequest) (*market.GetUserTokensResponse, error) {
+	l := logic.NewGetUserTokensLogic(ctx, s.svcCtx)
+	return l.GetUserTokens(in)
+}
+
+func (s *MarketServer) GetUserPools(ctx context.Context, in *market.GetUserPoolsRequest) (*market.GetUserPoolsResponse, error) {
+	l := logic.NewGetUserPoolsLogic(ctx, s.svcCtx)
+	return l.GetUserPools(in)
+}
+
+func (s *MarketServer) RecordUserAsset(ctx context.Context, in *market.RecordUserAssetRequest) (*market.RecordUserAssetResponse, error) {
+	l := logic.NewRecordUserAssetLogic(ctx, s.svcCtx)
+	return l.RecordUserAsset(in)
+}

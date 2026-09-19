@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import TokenList from './components/TokenList';
 import TradingViewChart from './components/TradingViewChart';
 import WalletDebugger from './components/WalletDebugger';
 import TokenCreation from './components/TokenCreation';
-import PoolCreation from './components/PoolCreation';
-import AddLiquidity from './components/AddLiquidity';
+import PoolHub from './components/PoolHub';
+import Sources from './components/Sources';
+import Portfolio from './components/Portfolio';
 import Faucet from './components/Faucet'; // Added Faucet import
 import TokenSecurity from './components/TokenSecurity'; // Added TokenSecurity import
 import './App.css';
@@ -81,10 +82,50 @@ const WalletListDebugger = () => {
 const CustomWalletButton = () => {
   const { wallets, select, connect, connecting, connected, disconnect, publicKey, wallet } = useWallet();
   const [showModal, setShowModal] = useState(false);
+  // select() updates `wallet` asynchronously (next render), so calling
+  // connect() synchronously right after select() sees the OLD wallet (still
+  // null) and throws WalletNotSelectedError — that's why the first click
+  // always failed and the second (where `wallet` was already set) worked.
+  // useLayoutEffect fires as soon as `wallet` actually updates, still inside
+  // the same paint cycle as the click, so it doesn't break wallet popup
+  // "user gesture" heuristics the way a setTimeout/useEffect delay would.
+  const pendingConnectRef = useRef(false);
 
   const handleConnect = () => {
     setShowModal(true);
   };
+
+  const doConnect = async () => {
+    try {
+      console.log('🔗 Connecting to wallet:', wallet?.adapter?.name);
+      await connect();
+      console.log('✅ Connect promise resolved');
+    } catch (connectError) {
+      console.error('❌ Error connecting wallet:', connectError);
+      const errorMessage = connectError?.message?.toLowerCase() || '';
+      const errorName = connectError?.name || '';
+
+      if (errorMessage.includes('user rejected') ||
+          errorMessage.includes('user cancelled') ||
+          errorMessage.includes('user denied') ||
+          errorName === 'WalletConnectionError' ||
+          errorName === 'WalletNotConnectedError') {
+        console.log('ℹ️ User rejected or cancelled the connection');
+        alert('Connection was cancelled. Please try again if you want to connect.');
+      } else {
+        alert(`Failed to connect wallet: ${connectError.message || 'Unknown error'}. Please try again.`);
+        setShowModal(true);
+      }
+    }
+  };
+
+  useLayoutEffect(() => {
+    if (pendingConnectRef.current && wallet && !connected && !connecting) {
+      pendingConnectRef.current = false;
+      doConnect();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallet, connected, connecting]);
 
   const handleSelectWallet = async (walletName, event) => {
     // Prevent event propagation
@@ -92,10 +133,10 @@ const CustomWalletButton = () => {
       event.preventDefault();
       event.stopPropagation();
     }
-    
+
     try {
       console.log('🔌 Selecting wallet:', walletName);
-      
+
       // Find the wallet adapter
       const selectedWallet = wallets.find(w => w.adapter.name === walletName);
       if (!selectedWallet) {
@@ -103,104 +144,35 @@ const CustomWalletButton = () => {
         alert(`Wallet ${walletName} not found. Please refresh the page.`);
         return;
       }
-      
+
       console.log('📋 Wallet adapter found:', {
         name: selectedWallet.adapter.name,
         readyState: selectedWallet.readyState,
         adapter: selectedWallet.adapter
       });
-      
+
       // Check if wallet adapter is actually available
       if (selectedWallet.readyState === 'NotDetected') {
         console.warn('⚠️ Wallet not detected, opening install page');
         window.open(getInstallUrl(walletName), '_blank');
         return;
       }
-      
-      // First select the wallet - this must happen synchronously
+
+      // Select the wallet, then let the useLayoutEffect above call connect()
+      // once `wallet` has actually updated to this new selection.
       try {
         select(walletName);
         console.log('✅ Wallet selected:', walletName);
+        pendingConnectRef.current = true;
       } catch (selectError) {
         console.error('❌ Error selecting wallet:', selectError);
         alert(`Failed to select wallet: ${selectError.message}`);
         return;
       }
-      
-      // Close modal immediately
+
       setShowModal(false);
-      
-      // IMPORTANT: connect() must be called directly in the user event handler
-      // Don't delay it, as browsers may block popups/authorization prompts
-      // The wallet extension should show an authorization popup now
-      try {
-        console.log('🔗 Connecting to wallet:', walletName);
-        console.log('🔍 Current wallet state before connect:', {
-          wallet: wallet?.adapter?.name,
-          connected,
-          connecting,
-          publicKey: publicKey?.toString()
-        });
-        
-        // Call connect directly - this should trigger wallet authorization popup
-        // The user should see a popup from the wallet extension asking for permission
-        const connectPromise = connect();
-        console.log('⏳ Waiting for wallet authorization...');
-        console.log('👤 Please check your wallet extension for an authorization popup');
-        
-        await connectPromise;
-        
-        console.log('✅ Connect promise resolved');
-        
-        // Check state after a short delay to allow React to update
-        setTimeout(() => {
-          console.log('🔍 State after connect:', {
-            wallet: wallet?.adapter?.name,
-            connected,
-            connecting,
-            publicKey: publicKey?.toString()
-          });
-          
-          if (!connected || !publicKey) {
-            console.warn('⚠️ Connection completed but state not updated. This might be a timing issue.');
-          }
-        }, 500);
-        
-      } catch (connectError) {
-        console.error('❌ Error connecting wallet:', connectError);
-        console.error('❌ Error details:', {
-          message: connectError?.message,
-          name: connectError?.name,
-          stack: connectError?.stack,
-          error: connectError
-        });
-        
-        // Check if it's a user rejection
-        const errorMessage = connectError?.message?.toLowerCase() || '';
-        const errorName = connectError?.name || '';
-        
-        if (errorMessage.includes('user rejected') || 
-            errorMessage.includes('user cancelled') ||
-            errorMessage.includes('user denied') ||
-            errorName === 'WalletConnectionError' ||
-            errorName === 'WalletNotConnectedError') {
-          console.log('ℹ️ User rejected or cancelled the connection');
-          alert('Connection was cancelled. Please try again if you want to connect.');
-          // Don't reopen modal on user rejection
-        } else {
-          // Show error to user
-          alert(`Failed to connect wallet: ${connectError.message || 'Unknown error'}. Please try again.`);
-          // Reopen modal if connection fails for other reasons
-          setShowModal(true);
-        }
-      }
     } catch (error) {
       console.error('❌ Error selecting wallet:', error);
-      console.error('❌ Error details:', {
-        message: error?.message,
-        name: error?.name,
-        stack: error?.stack
-      });
       alert(`Error: ${error.message || 'Unknown error'}`);
       setShowModal(true); // Reopen modal on error
     }
@@ -573,16 +545,22 @@ function App() {
                   🪙 Create Token
                 </button>
                 <button
-                  className={`tab-btn ${activeTab === 'create-pool' ? 'active' : ''}`}
-                  onClick={() => handleTabSwitch('create-pool')}
+                  className={`tab-btn ${activeTab === 'pool' ? 'active' : ''}`}
+                  onClick={() => handleTabSwitch('pool')}
                 >
-                  🏊 Create Pool
+                  🏊 Pool
                 </button>
                 <button
-                  className={`tab-btn ${activeTab === 'add-liquidity' ? 'active' : ''}`}
-                  onClick={() => handleTabSwitch('add-liquidity')}
+                  className={`tab-btn ${activeTab === 'sources' ? 'active' : ''}`}
+                  onClick={() => handleTabSwitch('sources')}
                 >
-                  💧 Add Liquidity
+                  📁 Sources
+                </button>
+                <button
+                  className={`tab-btn ${activeTab === 'portfolio' ? 'active' : ''}`}
+                  onClick={() => handleTabSwitch('portfolio')}
+                >
+                  👤 Portfolio
                 </button>
                 <button
                   className={`tab-btn ${activeTab === 'faucet' ? 'active' : ''}`}
@@ -610,11 +588,14 @@ function App() {
               {activeTab === 'create-token' && (
                 <TokenCreation />
               )}
-              {activeTab === 'create-pool' && (
-                <PoolCreation />
+              {activeTab === 'pool' && (
+                <PoolHub />
               )}
-              {activeTab === 'add-liquidity' && (
-                <AddLiquidity />
+              {activeTab === 'sources' && (
+                <Sources onTokenSelect={handleTokenSelect} />
+              )}
+              {activeTab === 'portfolio' && (
+                <Portfolio onTokenSelect={handleTokenSelect} />
               )}
               {activeTab === 'faucet' && (
                 <Faucet />

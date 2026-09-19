@@ -126,11 +126,12 @@ func (l *PumpTicker) UpdateCache() {
 
 			// Get token from map with nil check
 			token := tokenMap[pair.TokenAddress]
-			var tokenIcon, twitterUsername, telegram string
+			var tokenIcon, twitterUsername, telegram, program string
 			if token != nil {
 				tokenIcon = token.Icon
 				twitterUsername = token.TwitterUsername
 				telegram = token.Telegram
+				program = token.Program
 			}
 
 			item := &market.PumpTokenItem{
@@ -146,11 +147,13 @@ func (l *PumpTicker) UpdateCache() {
 				TwitterUsername:  twitterUsername,
 				Telegram:         telegram,
 				PairAddress:      pair.Address,
+				Program:          program,
 			}
 
 			if stats, ok := statsMap[pair.Address]; ok {
 				item.Txs_24H = stats.Txs
 				item.Vol_24H = stats.Vol
+				item.Price = stats.LastPrice
 				if stats.FirstPrice > 0 {
 					item.Change24 = (stats.LastPrice - stats.FirstPrice) / stats.FirstPrice * 100
 				}
@@ -259,11 +262,12 @@ func (l *PumpTicker) UpdateNewCreationCache() {
 
 			// Get token from map with nil check
 			token := tokenMap[pair.TokenAddress]
-			var tokenIcon, twitterUsername, telegram string
+			var tokenIcon, twitterUsername, telegram, program string
 			if token != nil {
 				tokenIcon = token.Icon
 				twitterUsername = token.TwitterUsername
 				telegram = token.Telegram
+				program = token.Program
 			}
 
 			item := &market.PumpTokenItem{
@@ -279,11 +283,13 @@ func (l *PumpTicker) UpdateNewCreationCache() {
 				TwitterUsername:  twitterUsername,
 				Telegram:         telegram,
 				PairAddress:      pair.Address,
+				Program:          program,
 			}
 
 			if stats, ok := statsMap[pair.Address]; ok {
 				item.Txs_24H = stats.Txs
 				item.Vol_24H = stats.Vol
+				item.Price = stats.LastPrice
 				if stats.FirstPrice > 0 {
 					item.Change24 = (stats.LastPrice - stats.FirstPrice) / stats.FirstPrice * 100
 				}

@@ -10,6 +10,7 @@ import (
 	"dex/market/market"
 	"dex/model/solmodel"
 	"dex/pkg/chain"
+	"dex/pkg/solprice"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -18,11 +19,12 @@ import (
 // CLMM pool rows carry no reserve/vault-balance snapshot anywhere in this
 // pipeline (consumer never indexes vault token balances for CLMM pools), so
 // LiquidityUsd and Apr stay 0 below — computing them honestly would need a
-// separate on-chain vault-balance indexer, not just a DB join. Vol/Txs are
-// real, computed from the trade table.
+// separate on-chain vault-balance indexer, not just a DB join. Vol/Txs/Price
+// are real, computed from the trade table.
 type clmm24hStats struct {
-	Txs uint32
-	Vol float64
+	Txs       uint32
+	Vol       float64
+	LastPrice float64
 }
 
 type GetClmmPoolListLogic struct {
@@ -61,8 +63,31 @@ func (l *GetClmmPoolListLogic) GetClmmPoolList(in *market.GetClmmPoolListRequest
 	// Fetch from database
 	var poolList []interface{}
 	var tokenAddresses []string
+	poolVersion := in.PoolVersion
 
-	if in.PoolVersion == 1 {
+	if in.PoolState != "" {
+		// Direct lookup by address (e.g. manually pasted into Add Liquidity) —
+		// version is unknown up front, so check both tables. Previously this
+		// filter didn't exist at all: the frontend passed pool_state on the
+		// query string, the backend silently ignored it and returned whatever
+		// the default page-1 pool list was, and the frontend treated that
+		// unrelated pool as if it were the requested one.
+		var v1 solmodel.ClmmPoolInfoV1
+		err := l.svcCtx.DB.WithContext(l.ctx).Where("pool_state = ?", in.PoolState).First(&v1).Error
+		if err == nil {
+			poolList = append(poolList, &v1)
+			tokenAddresses = append(tokenAddresses, v1.InputVaultMint, v1.OutputVaultMint)
+			poolVersion = 1
+		} else {
+			var v2 solmodel.ClmmPoolInfoV2
+			err := l.svcCtx.DB.WithContext(l.ctx).Where("pool_state = ?", in.PoolState).First(&v2).Error
+			if err == nil {
+				poolList = append(poolList, &v2)
+				tokenAddresses = append(tokenAddresses, v2.InputVaultMint, v2.OutputVaultMint)
+				poolVersion = 2
+			}
+		}
+	} else if in.PoolVersion == 1 {
 		// Fetch CLMM V1 pools
 		clmmV1Model := solmodel.NewClmmPoolInfoV1Model(l.svcCtx.DB)
 		pools, err := l.fetchClmmV1Pools(clmmV1Model, in.PageNo, in.PageSize)
@@ -107,7 +132,7 @@ func (l *GetClmmPoolListLogic) GetClmmPoolList(in *market.GetClmmPoolListRequest
 	// count can be joined straight off the trade table.
 	poolStates := make([]string, 0, len(poolList))
 	for _, poolInterface := range poolList {
-		if in.PoolVersion == 1 {
+		if poolVersion == 1 {
 			poolStates = append(poolStates, poolInterface.(*solmodel.ClmmPoolInfoV1).PoolState)
 		} else {
 			poolStates = append(poolStates, poolInterface.(*solmodel.ClmmPoolInfoV2).PoolState)
@@ -126,7 +151,7 @@ func (l *GetClmmPoolListLogic) GetClmmPoolList(in *market.GetClmmPoolListRequest
 	for _, poolInterface := range poolList {
 		var poolItem *market.ClmmPoolItem
 
-		if in.PoolVersion == 1 {
+		if poolVersion == 1 {
 			pool := poolInterface.(*solmodel.ClmmPoolInfoV1)
 			poolItem = l.buildClmmPoolItem(pool.PoolState, pool.InputVaultMint, pool.OutputVaultMint,
 				pool.TradeFeeRate, pool.CreatedAt.Unix(), tokenMap, 1)
@@ -139,6 +164,7 @@ func (l *GetClmmPoolListLogic) GetClmmPoolList(in *market.GetClmmPoolListRequest
 		if stats, ok := statsMap[poolItem.PoolState]; ok {
 			poolItem.Txs_24H = stats.Txs
 			poolItem.Vol_24H = stats.Vol
+			poolItem.Price = stats.LastPrice
 		}
 
 		poolItem.ChainId = in.ChainId
@@ -165,8 +191,9 @@ func (l *GetClmmPoolListLogic) GetClmmPoolList(in *market.GetClmmPoolListRequest
 	// }
 
 	return &market.GetClmmPoolListResponse{
-		List:  resultList,
-		Total: int32(len(resultList)),
+		List:        resultList,
+		Total:       int32(len(resultList)),
+		SolPriceUsd: solprice.GetSolUsdPrice(),
 	}, nil
 }
 
@@ -179,16 +206,20 @@ func (l *GetClmmPoolListLogic) fetch24hStats(chainId int64, poolStates []string)
 	}
 
 	type row struct {
-		PairAddr string
-		Cnt      uint32
-		Vol      float64
+		PairAddr  string
+		Cnt       uint32
+		Vol       float64
+		LastPrice float64
 	}
 	var rows []row
 
 	since := time.Now().Add(-24 * time.Hour)
 	err := l.svcCtx.DB.WithContext(l.ctx).
 		Model(&solmodel.Trade{}).
-		Select("pair_addr as pair_addr, COUNT(*) as cnt, COALESCE(SUM(total_usd), 0) as vol").
+		Select(`pair_addr as pair_addr,
+			COUNT(*) as cnt,
+			COALESCE(SUM(total_usd), 0) as vol,
+			CAST(SUBSTRING_INDEX(GROUP_CONCAT(token_price_usd ORDER BY block_time DESC), ',', 1) AS DECIMAL(65,18)) as last_price`).
 		Where("chain_id = ? AND pair_addr IN ? AND block_time >= ?", chainId, poolStates, since).
 		Group("pair_addr").
 		Scan(&rows).Error
@@ -197,7 +228,7 @@ func (l *GetClmmPoolListLogic) fetch24hStats(chainId int64, poolStates []string)
 	}
 
 	for _, r := range rows {
-		result[r.PairAddr] = clmm24hStats{Txs: r.Cnt, Vol: r.Vol}
+		result[r.PairAddr] = clmm24hStats{Txs: r.Cnt, Vol: r.Vol, LastPrice: r.LastPrice}
 	}
 	return result, nil
 }
