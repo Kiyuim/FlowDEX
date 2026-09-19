@@ -11,11 +11,13 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
   const chartContainerRef = useRef();
   const chartRef = useRef();
   const candlestickSeriesRef = useRef();
+  const volumeByTimeRef = useRef({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [interval, setInterval] = useState('1h');
   const [wsConnection, setWsConnection] = useState(null);
   const mockIntervalRef = useRef(null);
+  const [clickedCandle, setClickedCandle] = useState(null);
 
   // Initialize chart
   useEffect(() => {
@@ -68,6 +70,30 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
 
       chartRef.current = chart;
       candlestickSeriesRef.current = candlestickSeries;
+
+      // Click-to-inspect (GMGN-style): show OHLCV for the clicked candle in
+      // a small floating card positioned at the click point.
+      chart.subscribeClick((param) => {
+        if (!param.time || !param.point) {
+          setClickedCandle(null);
+          return;
+        }
+        const data = param.seriesData.get(candlestickSeries);
+        if (!data) {
+          setClickedCandle(null);
+          return;
+        }
+        setClickedCandle({
+          time: param.time,
+          open: data.open,
+          high: data.high,
+          low: data.low,
+          close: data.close,
+          volume: volumeByTimeRef.current[param.time] || 0,
+          x: param.point.x,
+          y: param.point.y,
+        });
+      });
 
       // Handle resize
       const handleResize = () => {
@@ -421,6 +447,7 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
 
       // Transform the data for TradingView
       const klineData = data.data?.list || data.list || [];
+      const volumeByTime = {};
       const chartData = klineData
         .map(kline => {
           const open = parseFloat(kline.open || kline.Open || 0);
@@ -428,12 +455,14 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
           const low = parseFloat(kline.low || kline.Low || 0);
           const close = parseFloat(kline.close || kline.Close || 0);
           const time = parseInt(kline.candle_time || kline.candleTime || kline.CandleTime || 0);
+          const volume = parseFloat(kline.volume_token || kline.volumeToken || kline.VolumeToken || 0);
 
           if (!time || !open || !high || !low || !close) {
             console.warn('Skipping invalid kline data:', kline);
             return null;
           }
 
+          volumeByTime[time] = volume;
           return {
             time: time,
             open: open,
@@ -444,6 +473,9 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         })
         .filter(item => item !== null)
         .sort((a, b) => a.time - b.time);
+
+      volumeByTimeRef.current = volumeByTime;
+      setClickedCandle(null);
 
       console.log('Transformed chart data:', chartData);
 
@@ -565,16 +597,55 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         </div>
       )}
 
-      <div 
-        ref={chartContainerRef} 
-        className="chart-container"
-        style={{ 
-          position: 'relative',
-          width: '100%',
-          height: '400px',
-          opacity: isLoading ? 0.6 : 1,
-        }}
-      />
+      <div style={{ position: 'relative' }}>
+        <div
+          ref={chartContainerRef}
+          className="chart-container"
+          style={{
+            position: 'relative',
+            width: '100%',
+            height: '400px',
+            opacity: isLoading ? 0.6 : 1,
+          }}
+        />
+
+        {clickedCandle && (
+          <div
+            className="candle-info-popup"
+            style={{
+              left: Math.min(clickedCandle.x + 12, (chartContainerRef.current?.clientWidth || 400) - 180),
+              top: Math.max(clickedCandle.y - 12, 8),
+            }}
+          >
+            <button
+              className="candle-info-close"
+              onClick={() => setClickedCandle(null)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <div className="candle-info-time">
+              {new Date(clickedCandle.time * 1000).toLocaleString()}
+            </div>
+            <div className="candle-info-row"><span>O</span><span>{clickedCandle.open.toFixed(8)}</span></div>
+            <div className="candle-info-row"><span>H</span><span>{clickedCandle.high.toFixed(8)}</span></div>
+            <div className="candle-info-row"><span>L</span><span>{clickedCandle.low.toFixed(8)}</span></div>
+            <div className="candle-info-row"><span>C</span><span>{clickedCandle.close.toFixed(8)}</span></div>
+            <div className="candle-info-row">
+              <span>Vol</span>
+              <span>{clickedCandle.volume >= 1000 ? `${(clickedCandle.volume / 1000).toFixed(1)}K` : clickedCandle.volume.toFixed(2)}</span>
+            </div>
+            <div className={`candle-info-row candle-info-change ${clickedCandle.close >= clickedCandle.open ? 'up' : 'down'}`}>
+              <span>Chg</span>
+              <span>
+                {clickedCandle.open > 0
+                  ? `${(((clickedCandle.close - clickedCandle.open) / clickedCandle.open) * 100).toFixed(2)}%`
+                  : '—'}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Real-time connection status */}
       <div className="connection-status">
