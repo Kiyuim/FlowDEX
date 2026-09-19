@@ -1,0 +1,137 @@
+.App {
+  min-height: 100vh;
+  background-color: #0a0a0a;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  background-color: #0a0a0a;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Tab Navigation */
+.tab-navigation {
+  display: flex;
+  gap: 8px;
+}
+
+.tab-btn {
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  color: #ffffff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab-btn:hover {
+  background: #3a3a3a;
+  border-color: #4a4a4a;
+}
+
+.tab-btn.active {
+  background: #00d4aa;
+  color: #000000;
+  border-color: #00d4aa;
+}
+
+.tab-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #1a1a1a;
+  border-color: #2a2a2a;
+  color: #666;
+}
+
+/* No Token Selected Screen */
+.no-token-selected {
+  text-align: center;
+  padding: 60px 20px;
+  background: #1a1a1a;
+  border-radius: 12px;
+  margin: 20px 0;
+  border: 1px solid #2a2a2a;
+}
+
+.no-token-selected h2 {
+  color: #ffffff;
+  font-size: 2rem;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.no-token-selected p {
+  color: #888;
+  font-size: 1.1rem;
+  margin-bottom: 30px;
+  line-height: 1.5;
+}
+
+.back-to-tokens-btn {
+  background: #00d4aa;
+  color: #000000;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.back-to-tokens-btn:hover {
+  background: #00c19a;
+  transform: translateY(-1px);
+}
+
+/* Scrollbar styling for the entire app */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Global button focus styles */
+button:focus {
+  outline: 2px solid #00ff88;
+  outline-offset: 2px;
+}
+
+/* Global input focus styles */
+input:focus {
+  outline: 2px solid #00ff88;
+  outline-offset: 2px;
+}
+
+/* Disable text selection for UI elements */
+.nav-tab,
+.btn,
+.column-header,
+.token-card {
+  user-select: none;
+} 

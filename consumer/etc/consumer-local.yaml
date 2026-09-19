@@ -1,0 +1,58 @@
+Name: consumer.rpc
+ListenOn: 0.0.0.0:8082
+# Etcd:
+#   Hosts:
+#   - 127.0.0.1:2379
+#   Key: consumer.rpc
+
+Consumer:
+  Concurrency: 1
+
+Mysql:
+  User: root
+  Password: web3ite.fun # Corresponds to the password in docker-compose.yml
+  Host: 127.0.0.1 # Use loopback IP to connect from host to Docker container
+  Port: 3307
+  Dbname: fun_dexs # Database name in docker-compose
+
+Sol:
+  ChainId: 100000
+  # Local default (no secret in git). To use your own Helius key locally:
+  #   export SOL_NODE_URL="https://mainnet.helius-rpc.com/?api-key=YOUR_KEY"
+  #   export SOL_WSURL="wss://mainnet.helius-rpc.com/?api-key=YOUR_KEY"
+  NodeUrl:
+    - "https://api.mainnet-beta.solana.com"
+  WSUrl: "wss://api.mainnet-beta.solana.com"
+
+Redis:
+  Host: 127.0.0.1:6379 # Use loopback IP to connect from host to Docker container
+  Pass: "" # No password set in docker-compose
+  Type: node
+  Key: bizRedis
+  PingTimeout: 10s
+  Tls: false
+
+market_service:
+  target: localhost:8080
+  nonblock: true
+  timeout: 10000  # 10 seconds timeout
+  transport: tcp
+  middlewares:
+    breaker: false
+
+trade_service:
+  target: localhost:8081
+  nonblock: true
+  timeout: 100000  # 3 seconds timeout
+  transport: tcp
+  middlewares:
+    breaker: false
+
+KqSolTrades:
+  Name: web3fun-kafka
+  Brokers:
+    - 127.0.0.1:29092 # Use loopback IP to connect from host to Docker container
+  Group: web3-dex-fix-2025
+  Topic: web3fun
+  Offset: last
+

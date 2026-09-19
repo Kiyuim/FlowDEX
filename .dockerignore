@@ -1,0 +1,12 @@
+# Keep the Docker build context small/fast
+pump-tokens-ui/node_modules
+pump-tokens-ui/build
+**/node_modules
+.git
+*.png
+docs
+template
+tools
+scripts
+docker
+cmd/debugtools

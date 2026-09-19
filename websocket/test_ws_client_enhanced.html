@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token WebSocket Test Client</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        .container {
+            background: #2d2d2d;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.connected { background-color: #4caf50; }
+        .status.connecting { background-color: #ff9800; }
+        .status.disconnected { background-color: #f44336; }
+        .status.error { background-color: #9c27b0; }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        
+        .message-log {
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 5px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            border: 1px solid #555;
+        }
+        .token-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #4caf50;
+        }
+        .token-card h3 { margin: 0 0 10px 0; color: #fff; }
+        .token-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .token-field { font-size: 0.9em; color: #e0e0e0; }
+        .token-field strong { color: #fff; }
+        
+        input, select {
+            background: #3d3d3d;
+            color: white;
+            border: 1px solid #555;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 5px;
+        }
+        .controls { display: flex; align-items: center; gap: 10px; margin: 15px 0; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .stat-box {
+            background: #3d3d3d;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value { font-size: 1.5em; font-weight: bold; color: #4caf50; }
+    </style>
+</head>
+<body>
+    <h1>🎯 Token WebSocket Test Client</h1>
+    
+    <div class="container">
+        <h2>🔗 Connection Control</h2>
+        <div class="controls">
+            <label>Server URL:</label>
+            <input type="text" id="wsUrl" value="ws://118.194.235.63:8086/ws/tokens?chain_id=100000" style="width: 400px;">
+            <button id="connectBtn">Connect</button>
+            <button id="disconnectBtn" disabled>Disconnect</button>
+            <button id="subscribeBtn" disabled>Subscribe</button>
+        </div>
+        <div id="connectionStatus" class="status disconnected">Disconnected</div>
+    </div>
+
+    <div class="container">
+        <h2>📊 Statistics</h2>
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value" id="clientCount">0</div>
+                <div>Connected Clients</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="messageCount">0</div>
+                <div>Messages Received</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="tokenCount">0</div>
+                <div>New Tokens</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="connectionTime">--</div>
+                <div>Connected For</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>🆕 Latest Tokens</h2>
+        <div id="tokenList"></div>
+    </div>
+
+    <div class="container">
+        <h2>📜 Message Log</h2>
+        <button onclick="clearLog()">Clear Log</button>
+        <div id="messageLog" class="message-log"></div>
+    </div>
+
+    <script>
+        class TokenWebSocketClient {
+            constructor() {
+                this.ws = null;
+                this.messageCount = 0;
+                this.tokenCount = 0;
+                this.connectionStartTime = null;
+                this.connectionTimer = null;
+                
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                document.getElementById('connectBtn').addEventListener('click', () => this.connect());
+                document.getElementById('disconnectBtn').addEventListener('click', () => this.disconnect());
+                document.getElementById('subscribeBtn').addEventListener('click', () => this.sendSubscription());
+            }
+
+            connect() {
+                const url = document.getElementById('wsUrl').value;
+                this.log(`🔌 Attempting to connect to: ${url}`);
+                
+                try {
+                    this.ws = new WebSocket(url);
+                    this.updateStatus('connecting', 'Connecting...');
+                    
+                    this.ws.onopen = (event) => {
+                        this.log('✅ WebSocket connection established');
+                        this.updateStatus('connected', 'Connected');
+                        this.connectionStartTime = Date.now();
+                        this.startConnectionTimer();
+                        
+                        document.getElementById('connectBtn').disabled = true;
+                        document.getElementById('disconnectBtn').disabled = false;
+                        document.getElementById('subscribeBtn').disabled = false;
+                        
+                        // Auto-subscribe
+                        setTimeout(() => this.sendSubscription(), 1000);
+                    };
+
+                    this.ws.onmessage = (event) => {
+                        this.messageCount++;
+                        this.updateStats();
+                        
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.log(`📨 Message received: ${JSON.stringify(data, null, 2)}`);
+                            this.handleMessage(data);
+                        } catch (error) {
+                            this.log(`❌ Error parsing message: ${error.message}`);
+                            this.log(`📄 Raw data: ${event.data}`);
+                        }
+                    };
+
+                    this.ws.onerror = (error) => {
+                        this.log(`❌ WebSocket error: ${error}`);
+                        this.updateStatus('error', 'Connection Error');
+                    };
+
+                    this.ws.onclose = (event) => {
+                        this.log(`🔌 Connection closed: Code=${event.code}, Reason="${event.reason}", Clean=${event.wasClean}`);
+                        this.updateStatus('disconnected', 'Disconnected');
+                        this.stopConnectionTimer();
+                        
+                        document.getElementById('connectBtn').disabled = false;
+                        document.getElementById('disconnectBtn').disabled = true;
+                        document.getElementById('subscribeBtn').disabled = true;
+                    };
+
+                } catch (error) {
+                    this.log(`❌ Error creating WebSocket: ${error.message}`);
+                    this.updateStatus('error', 'Connection Failed');
+                }
+            }
+
+            disconnect() {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.close(1000, 'Manual disconnect');
+                    this.log('🛑 Manual disconnect requested');
+                }
+            }
+
+            sendSubscription() {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    const subscribeMsg = {
+                        type: 'subscribe',
+                        data: {
+                            chain_id: 100000,
+                            categories: ['new_creation', 'completing', 'completed']
+                        }
+                    };
+                    
+                    this.ws.send(JSON.stringify(subscribeMsg));
+                    this.log(`📨 Subscription sent: ${JSON.stringify(subscribeMsg, null, 2)}`);
+                } else {
+                    this.log('❌ Cannot send subscription - WebSocket not connected');
+                }
+            }
+
+            handleMessage(data) {
+                switch (data.type) {
+                    case 'new_token':
+                        this.tokenCount++;
+                        this.updateStats();
+                        this.displayNewToken(data.data);
+                        break;
+                        
+                    case 'connection_established':
+                        if (data.data && data.data.client_count !== undefined) {
+                            document.getElementById('clientCount').textContent = data.data.client_count;
+                        }
+                        break;
+                        
+                    case 'token_status_update':
+                        this.log(`🔄 Token status update: ${data.data.token_name || data.data.token_symbol}`);
+                        break;
+                        
+                    default:
+                        this.log(`🔍 Unknown message type: ${data.type}`);
+                }
+            }
+
+            displayNewToken(tokenData) {
+                const tokenList = document.getElementById('tokenList');
+                const tokenCard = document.createElement('div');
+                tokenCard.className = 'token-card';
+                
+                const launchTime = tokenData.launch_time ? new Date(tokenData.launch_time * 1000).toLocaleString() : 'Unknown';
+                const mktCap = tokenData.mkt_cap ? `$${(tokenData.mkt_cap / 1000000).toFixed(2)}M` : 'Unknown';
+                
+                tokenCard.innerHTML = `
+                    <h3>${tokenData.token_name || 'Unnamed Token'} (${tokenData.token_symbol || 'N/A'})</h3>
+                    <div class="token-info">
+                        <div class="token-field"><strong>Address:</strong> ${tokenData.token_address || 'N/A'}</div>
+                        <div class="token-field"><strong>Market Cap:</strong> ${mktCap}</div>
+                        <div class="token-field"><strong>Holders:</strong> ${tokenData.hold_count || 0}</div>
+                        <div class="token-field"><strong>Launch Time:</strong> ${launchTime}</div>
+                        <div class="token-field"><strong>Pump Status:</strong> ${tokenData.pump_status || 'Unknown'}</div>
+                        <div class="token-field"><strong>Twitter:</strong> ${tokenData.twitter_username || 'N/A'}</div>
+                    </div>
+                `;
+                
+                tokenList.insertBefore(tokenCard, tokenList.firstChild);
+                
+                // Keep only last 10 tokens
+                while (tokenList.children.length > 10) {
+                    tokenList.removeChild(tokenList.lastChild);
+                }
+            }
+
+            updateStatus(status, text) {
+                const statusEl = document.getElementById('connectionStatus');
+                statusEl.className = `status ${status}`;
+                statusEl.textContent = text;
+            }
+
+            updateStats() {
+                document.getElementById('messageCount').textContent = this.messageCount;
+                document.getElementById('tokenCount').textContent = this.tokenCount;
+            }
+
+            startConnectionTimer() {
+                this.connectionTimer = setInterval(() => {
+                    if (this.connectionStartTime) {
+                        const elapsed = Math.floor((Date.now() - this.connectionStartTime) / 1000);
+                        const minutes = Math.floor(elapsed / 60);
+                        const seconds = elapsed % 60;
+                        document.getElementById('connectionTime').textContent = 
+                            `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    }
+                }, 1000);
+            }
+
+            stopConnectionTimer() {
+                if (this.connectionTimer) {
+                    clearInterval(this.connectionTimer);
+                    this.connectionTimer = null;
+                }
+                document.getElementById('connectionTime').textContent = '--';
+            }
+
+            log(message) {
+                const logEl = document.getElementById('messageLog');
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = `[${timestamp}] ${message}\n`;
+                
+                logEl.textContent += logEntry;
+                logEl.scrollTop = logEl.scrollHeight;
+                
+                console.log(message);
+            }
+        }
+
+        function clearLog() {
+            document.getElementById('messageLog').textContent = '';
+        }
+
+        // Initialize the client
+        const client = new TokenWebSocketClient();
+        
+        // Auto-connect on page load
+        setTimeout(() => {
+            document.getElementById('connectBtn').click();
+        }, 1000);
+    </script>
+</body>
+</html> 

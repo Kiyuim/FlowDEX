@@ -1,0 +1,322 @@
+--  CREATE TABLE `block`
+--  (
+--      `id`           bigint                                                         NOT NULL AUTO_INCREMENT,
+--      `slot`         bigint                                                         NOT NULL DEFAULT '0' COMMENT 'slot',
+--      `block_height` bigint                                                         NOT NULL DEFAULT '0' COMMENT 'block_height',
+--      `block_time`   timestamp                                                      NOT NULL COMMENT 'block_time',
+--      `status`       tinyint                                                        NOT NULL DEFAULT '0' COMMENT '1 processed, 2 failed',
+--      `sol_price`    decimal(64, 18)                                                NOT NULL DEFAULT '0.000000000000000000' COMMENT 'sol price',
+--      `created_at`   timestamp                                                      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--      `updated_at`   timestamp                                                      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--      `deleted_at`   timestamp                                                      NULL     DEFAULT NULL,
+--      `err_message`  varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'error message',
+--      PRIMARY KEY (`id`),
+--      UNIQUE KEY `slot_index` (`slot`),
+--      KEY `block_time_index` (`block_time`)
+--  ) ENGINE = InnoDB
+--    DEFAULT CHARSET = utf8mb4
+--    COLLATE = utf8mb4_general_ci COMMENT ='block';
+
+
+-- CREATE TABLE `token` (
+--   `id` bigint NOT NULL AUTO_INCREMENT,
+--   `chain_id` int NOT NULL DEFAULT '1' COMMENT 'Chain ID',
+--   `address` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Token contract address',
+--   `program` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'program',
+--   `name` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Token name',
+--   `symbol` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Token symbol',
+--   `decimals` tinyint(1) NOT NULL DEFAULT '18' COMMENT 'Token decimals',
+--   `total_supply` double NOT NULL DEFAULT '0' COMMENT 'Total token supply',
+--   `icon` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Token icon URL',
+--   `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Token description',
+--   `hold_count` int NOT NULL DEFAULT '0' COMMENT 'Number of holders',
+--   `is_ca_drop_owner` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Owner rights renounced',
+--   `is_ca_verify` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Contract verified',
+--   `is_honey_scam` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Honeypot check (Cannot sell)',
+--   `is_liquid_lock` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Liquidity locked',
+--   `is_can_pause_trade` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Can pause trading',
+--   `is_can_change_tax` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Can modify tax rate',
+--   `is_have_black_list` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Has blacklist mechanism',
+--   `is_can_all_sell` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Can sell entire balance',
+--   `is_have_proxy` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Has proxy contract',
+--   `is_can_external_call` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Contract can make external calls',
+--   `is_can_add_token` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Contract has minting capability',
+--   `is_can_change_token` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Owner can modify user balances',
+--   `sell_tax` decimal(10,4) NOT NULL DEFAULT '0.0000' COMMENT 'Sell tax rate',
+--   `buy_tax` decimal(10,4) NOT NULL DEFAULT '0.0000' COMMENT 'Buy tax rate',
+--   `twitter_username` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Twitter username',
+--   `website` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Official website',
+--   `telegram` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Telegram link',
+--   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--   `deleted_at` timestamp NULL DEFAULT NULL,
+--   `is_check_ca` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Contract analysis completed',
+--   `check_ca_at` bigint NOT NULL DEFAULT '0' COMMENT 'Contract analysis timestamp',
+--   `is_burn_pool` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Indicates if the token is part of a burn pool',
+--   `is_top_ten` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Indicates if the token is in the top ten by market capitalization',
+--   `audit_source` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Audit source',
+--   `slot` bigint NOT NULL DEFAULT '0',
+--   PRIMARY KEY (`id`) USING BTREE,
+--   UNIQUE KEY `chain_id_address_index` (`chain_id`,`address`) USING BTREE,
+--   UNIQUE KEY `chain_id_address_symbol_index` (`chain_id`,`address`,`symbol`) USING BTREE,
+--   KEY `address_index` (`address`) USING BTREE,
+--   KEY `idx_created_audit` (`created_at` DESC) USING BTREE,
+--   KEY `icon_index` (`icon`(255)) USING BTREE
+-- ) ENGINE=InnoDB AUTO_INCREMENT=1165832 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC COMMENT='Token Table';
+
+
+
+
+-- CREATE TABLE `trade` (
+--   `id` bigint NOT NULL AUTO_INCREMENT,
+--   `chain_id` int NOT NULL DEFAULT '0' COMMENT 'Chain ID',
+--   `pair_addr` varchar(64) COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Trading pair contract address',
+--   `tx_hash` varchar(256) COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Transaction hash',
+--   `hash_id` varchar(256) COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Transaction ID',
+--   `maker` varchar(64) COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Transaction initiator',
+--   `trade_type` varchar(64) COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Trade type',
+--   `base_token_amount` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Base token amount in this trade',
+--   `token_amount` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Token amount in this trade',
+--   `base_token_price_usd` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Base token price in USD',
+--   `total_usd` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Total trade value in USD',
+--   `token_price_usd` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Token price in USD',
+--   `to` varchar(64) COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Token recipient',
+--   `block_num` bigint NOT NULL DEFAULT '0' COMMENT 'Block height',
+--   `block_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Block timestamp',
+--   `block_time_stamp` bigint NOT NULL DEFAULT '0' COMMENT 'Transaction timestamp',
+--   `swap_name` varchar(64) COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'DEX name',
+--   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--   `deleted_at` timestamp NULL DEFAULT NULL,
+--   PRIMARY KEY (`id`),
+--   UNIQUE KEY `hash_id_index` (`hash_id`),
+--   KEY `marker_index` (`maker`),
+--   KEY `block_time_index` (`block_time`)
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Trade records';
+
+
+-- CREATE TABLE `pair` (
+--   `id` bigint NOT NULL AUTO_INCREMENT,
+--   `chain_id` int NOT NULL DEFAULT '1' COMMENT 'Chain ID',
+--   `address` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Trading pair address',
+--   `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'DEX factory version swap name',
+--   `factory_address` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Factory contract address',
+--   `base_token_address` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Base token address',
+--   `token_address` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Token address',
+--   `base_token_symbol` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Base token symbol',
+--   `token_symbol` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Token symbol',
+--   `base_token_decimal` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Base token decimals',
+--   `token_decimal` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Token decimals',
+--   `base_token_is_native_token` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Is base token native currency',
+--   `base_token_is_token0` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Is base token token0',
+--   `init_base_token_amount` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Initial base token liquidity',
+--   `init_token_amount` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Initial token liquidity',
+--   `current_base_token_amount` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Current base token liquidity',
+--   `current_token_amount` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Current token liquidity',
+--   `fdv` double NOT NULL DEFAULT '0' COMMENT 'Fully diluted valuation',
+--   `mkt_cap` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Market capitalization',
+--   `token_price` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Token price',
+--   `base_token_price` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Base token price',
+--   `block_num` int NOT NULL DEFAULT '0' COMMENT 'Creation block height',
+--   `block_time` timestamp NOT NULL COMMENT 'Creation block timestamp',
+--   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--   `deleted_at` timestamp NULL DEFAULT NULL,
+--   `highest_token_price` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Highest token price',
+--   `latest_trade_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Latest on-chain trade timestamp',
+--   `pump_point` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Pump score',
+--   `launch_pad_point` double DEFAULT '0' COMMENT 'LaunchPad progress',
+--   `pump_launched` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Pump launched (0: false, 1: true)',
+--   `pump_market_cap` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Pump market cap',
+--   `pump_owner` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Pump owner address',
+--   `pump_swap_pair_addr` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Pump swap pair address',
+--   `pump_virtual_base_token_reserves` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Pump virtual base token reserves',
+--   `pump_virtual_token_reserves` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Pump virtual token reserves',
+--   `pump_status` tinyint NOT NULL DEFAULT '0' COMMENT 'Pump status',
+--   `pump_pair_addr` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Pump pair address',
+--   `slot` bigint NOT NULL DEFAULT '0',
+--   `liquidity` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Liquidity',
+--   `launch_pad_status` int NOT NULL DEFAULT '0' COMMENT 'LaunchPad status: 0-not launchpad, 1-new creation, 2-completing, 3-completed',
+--   PRIMARY KEY (`id`) USING BTREE,
+--   UNIQUE KEY `chain_id_address_index` (`chain_id`,`address`) USING BTREE,
+--   KEY `name_index` (`name`) USING BTREE,
+--   KEY `token_address_index` (`token_address`) USING BTREE,
+--   KEY `token_symbol_index` (`token_symbol`) USING BTREE,
+--   KEY `pump_point_index` (`pump_point`) USING BTREE,
+--   KEY `block_num_index` (`block_num`) USING BTREE,
+--   KEY `pump_status_index` (`pump_status`) USING BTREE,
+--   KEY `block_time_index` (`block_time`) USING BTREE
+-- ) ENGINE=InnoDB AUTO_INCREMENT=1099042 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC COMMENT='Pair Table';
+
+
+-- CREATE TABLE `raydium_pool` (
+--   `id` bigint NOT NULL AUTO_INCREMENT,
+--   `chain_id` bigint NOT NULL DEFAULT '0' COMMENT 'Chain ID',
+--   `amm_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'AMM ID (pair address)',
+--   `amm_authority` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'AMM Authority',
+--   `amm_open_orders` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'AMM Open Orders',
+--   `amm_target_orders` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'AMM Target Orders',
+--   `pool_coin_token_account` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Pool Coin Token Account',
+--   `pool_pc_token_account` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Pool PC Token Account',
+--   `serum_program_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Serum Program ID',
+--   `serum_market` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Serum Market',
+--   `serum_bids` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Serum Bids',
+--   `serum_asks` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Serum Asks',
+--   `serum_event_queue` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Serum Event Queue',
+--   `serum_coin_vault_account` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Serum Coin Vault Account',
+--   `serum_pc_vault_account` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Serum PC Vault Account',
+--   `serum_vault_signer` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Serum Vault Signer',
+--   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation timestamp',
+--   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Update timestamp',
+--   `deleted_at` timestamp NULL DEFAULT NULL,
+--   `tx_hash` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '',
+--   `base_mint` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+--   `quote_mint` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+--   PRIMARY KEY (`id`) USING BTREE,
+--   UNIQUE KEY `chain_id_amm_id_index` (`chain_id`,`amm_id`) USING BTREE
+-- ) ENGINE=InnoDB AUTO_INCREMENT=197203 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC COMMENT='Raydium Pool';
+
+
+--  CREATE TABLE `cpmm_pool_info`
+--  (
+--      `id`                   BIGINT                                                        NOT NULL AUTO_INCREMENT COMMENT 'Primary Key',
+--      `amm_config`           VARCHAR(256)                                                  NOT NULL COMMENT 'AMM Config Account',
+--      `pool_state`           VARCHAR(256)                                                  NOT NULL COMMENT 'Pool State Account',
+--      `input_vault`          VARCHAR(256)                                                  NOT NULL COMMENT 'Input Vault',
+--      `authority`            VARCHAR(256)                                                  NOT NULL COMMENT 'Authority',
+--      `output_vault`         VARCHAR(256)                                                  NOT NULL COMMENT 'Output Vault',
+--      `input_token_program`  VARCHAR(256)                                                  NOT NULL COMMENT 'Input Token Program',
+--      `output_token_program` VARCHAR(256)                                                  NOT NULL COMMENT 'Output Token Program',
+--      `input_token_mint`     VARCHAR(256)                                                  NOT NULL COMMENT 'Input Token Mint',
+--      `output_token_mint`    VARCHAR(256)                                                  NOT NULL COMMENT 'Output Token Mint',
+--      `trade_fee_rate`       INT                                                           NOT NULL COMMENT 'Trade Fee Rate',
+--      `observation_state`    VARCHAR(256)                                                  NOT NULL COMMENT 'Observation State',
+--      `tx_hash`              VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Tx hash',
+--      `created_at`           TIMESTAMP                                                     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation timestamp',
+--      `updated_at`           TIMESTAMP                                                     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Update timestamp',
+--      PRIMARY KEY (`id`),
+--      UNIQUE KEY `idx_pool_state` (`pool_state`)
+--  ) ENGINE = InnoDB
+--    DEFAULT CHARSET = utf8mb4
+--    COLLATE = utf8mb4_general_ci COMMENT ='cpmm pool info';
+
+
+--  CREATE TABLE `sol_account`
+--  (
+--      `id`               bigint                                                       NOT NULL AUTO_INCREMENT,
+--      `address`          varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Wallet address',
+--      `balance`          bigint                                                       NOT NULL DEFAULT '0' COMMENT 'SOL balance',
+--      `slot`             bigint                                                       NOT NULL DEFAULT '0' COMMENT 'Last updated slot',
+--      `created_at`       timestamp                                                    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--      `updated_at`       timestamp                                                    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--      `deleted_at`       timestamp                                                    NULL     DEFAULT NULL,
+--      `block_time_stamp` bigint                                                       NOT NULL DEFAULT '0',
+--      PRIMARY KEY (`id`),
+--      UNIQUE KEY `address_index` (`address`)
+--  ) ENGINE = InnoDB
+--    DEFAULT CHARSET = utf8mb4
+--    COLLATE = utf8mb4_general_ci COMMENT ='SOL account table';
+
+-- CREATE TABLE `clmm_pool_info_v1` (
+--   `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'Primary Key',
+--   `amm_config` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'AMM Pool Configuration',
+--   `pool_state` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'AMM Pool State Account',
+--   `input_vault` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Input Token Vault',
+--   `tick_array` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Tick Array',
+--   `output_vault` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Output Token Vault',
+--   `observation_state` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Oracle Observation State',
+--   `token_program` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'SPL Token Program',
+--   `token_program_2022` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'SPL Token Program 2022',
+--   `memo_program` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Transaction Memo Program (Optional)',
+--   `input_vault_mint` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Input Vault Mint',
+--   `output_vault_mint` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Output Vault Mint',
+--   `remaining_accounts` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Remaining Accounts (JSON format)',
+--   `trade_fee_rate` int NOT NULL COMMENT 'Trade Fee Rate',
+--   `tx_hash` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Tx hash',
+--   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation timestamp',
+--   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Update timestamp',
+--   `deleted_at` timestamp NULL DEFAULT NULL COMMENT 'Soft delete timestamp',
+--   PRIMARY KEY (`id`) USING BTREE,
+--   UNIQUE KEY `idx_pool_state` (`pool_state`) USING BTREE,
+--   KEY `idx_input_vault` (`input_vault`) USING BTREE,
+--   KEY `idx_output_vault` (`output_vault`) USING BTREE
+-- ) ENGINE=InnoDB AUTO_INCREMENT=12588 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC COMMENT='CLMM Pool V1 Information';
+
+-- CREATE TABLE `clmm_pool_info_v2` (
+--   `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'Primary Key',
+--   `amm_config` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'AMM Pool Configuration',
+--   `pool_state` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'AMM Pool State Account',
+--   `input_vault` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Input Token Vault',
+--   `output_vault` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Output Token Vault',
+--   `observation_state` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Oracle Observation State',
+--   `token_program` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'SPL Token Program',
+--   `token_program_2022` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'SPL Token Program 2022',
+--   `memo_program` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Transaction Memo Program (Optional)',
+--   `input_vault_mint` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Input Vault Mint',
+--   `output_vault_mint` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Output Vault Mint',
+--   `remaining_accounts` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Remaining Accounts (JSON format)',
+--   `tx_hash` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Tx hash',
+--   `trade_fee_rate` int NOT NULL COMMENT 'Trade Fee Rate',
+--   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation timestamp',
+--   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Update timestamp',
+--   `deleted_at` timestamp NULL DEFAULT NULL COMMENT 'Soft delete timestamp',
+--   PRIMARY KEY (`id`) USING BTREE,
+--   UNIQUE KEY `idx_pool_state` (`pool_state`) USING BTREE,
+--   KEY `idx_input_vault` (`input_vault`) USING BTREE,
+--   KEY `idx_output_vault` (`output_vault`) USING BTREE
+-- ) ENGINE=InnoDB AUTO_INCREMENT=13729 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC COMMENT='CLMM Pool V2 Information';
+
+
+
+-- CREATE TABLE `pump_amm_info`
+-- (
+--     `id`                               BIGINT                                                        NOT NULL AUTO_INCREMENT COMMENT 'Primary Key',
+--     `pool_account`                     VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Pool account address',
+--     `global_config_account`            VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Global configuration account address',
+--     `base_mint_account`                VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Base mint address',
+--     `quote_mint_account`               VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Quote mint address',
+--     `pool_base_token_account`          VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Pool''s base token account',
+--     `pool_quote_token_account`         VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Pool''s quote token account',
+--     `protocol_fee_recipient_account`   VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Protocol fee recipient account',
+--     `protocol_fee_recipient_token_account` VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Protocol fee recipient token account',
+--     `base_token_program`                VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Base token program address',
+--     `quote_token_program`               VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Quote token program address',
+--     `system_program`                    VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'System program address',
+--     `associated_token_program`          VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Associated token program address',
+--     `event_authority_account`           VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Event authority account',
+--     `program_account`                   VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'Program account address',
+--     `created_at`                        TIMESTAMP                                                     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation timestamp',
+--     `updated_at`                        TIMESTAMP                                                     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Update timestamp',
+--     `deleted_at`                        TIMESTAMP                                                     NULL DEFAULT NULL COMMENT 'Soft delete timestamp',
+--     PRIMARY KEY (`id`),
+--     UNIQUE KEY `idx_pool_account` (`pool_account`)  -- 添加唯一索引到 pool_account
+-- ) ENGINE = InnoDB
+-- DEFAULT CHARSET = utf8mb4
+-- COLLATE = utf8mb4_general_ci COMMENT ='Pump AMM Information';
+
+
+-- CREATE TABLE `sol_token_account` (
+--   `id` bigint NOT NULL AUTO_INCREMENT,
+--   `owner_address` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Owner wallet address',
+--   `status` tinyint NOT NULL DEFAULT '0' COMMENT '0: Open, 1: Closed',
+--   `chain_id` int NOT NULL DEFAULT '0' COMMENT 'Chain id',
+--   `token_account_address` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Token account address',
+--   `token_address` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '' COMMENT 'Token contract address',
+--   `token_decimal` tinyint NOT NULL DEFAULT '0' COMMENT 'Token decimals',
+--   `balance` bigint NOT NULL DEFAULT '0' COMMENT 'Token balance',
+--   `slot` bigint NOT NULL DEFAULT '0',
+--   `buy_count` bigint NOT NULL DEFAULT '0' COMMENT 'Number of buy transactions',
+--   `sell_count` bigint NOT NULL DEFAULT '0' COMMENT 'Number of sell transactions',
+--   `buy_amount` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Total buy amount',
+--   `sell_amount` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Total sell amount',
+--   `buy_base_token_amount` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Total base token spent on buys',
+--   `sell_base_token_amount` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Total base token received from sells',
+--   `pnl_amount` bigint NOT NULL DEFAULT '0' COMMENT 'Realized profit/loss',
+--   `un_pnl_amount` bigint NOT NULL DEFAULT '0' COMMENT 'Unrealized profit/loss',
+--   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--   `deleted_at` timestamp NULL DEFAULT NULL,
+--   PRIMARY KEY (`id`) USING BTREE,
+--   UNIQUE KEY `sol_token_account_owner_address_token_account_address_uindex` (`owner_address`,`token_account_address`) USING BTREE,
+--   KEY `chainid_tokenaddress_balance_index` (`chain_id`,`token_address`,`balance`) USING BTREE
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC COMMENT='SOL token account table';

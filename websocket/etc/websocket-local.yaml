@@ -1,0 +1,9 @@
+Name: websocket
+Host: 0.0.0.0
+Port: 8086
+
+Redis:
+  Host: 127.0.0.1
+  Port: 6379
+  Password:
+  DB: 0

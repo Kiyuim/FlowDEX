@@ -1,0 +1,19 @@
+# Per-service image for Railway `gateway` (HTTP->gRPC edge). Matches prod image
+# (golang:1.25 builder + debian:bookworm-slim runtime).
+FROM golang:1.25 AS build
+ENV GOPROXY=https://proxy.golang.org,direct
+ENV CGO_ENABLED=0 GOOS=linux
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN go build -ldflags="-s -w" -o /out/app ./gateway/gateway.go
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates gettext-base && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=build /out/app /app/app
+COPY --from=build /src/gateway/etc /app/etc
+# Public HTTP port — Railway routes the service domain to the EXPOSEd port.
+EXPOSE 8083
+CMD ["/app/app", "-f", "etc/gateway.yaml"]

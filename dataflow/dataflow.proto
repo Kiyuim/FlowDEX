@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package dataflow;
+option go_package="./dataflow";
+
+service Dataflow {
+}
+
+message Klines {
+  repeated Kline list = 1;
+}
+
+message Kline {
+  int64 chain_id = 1;
+  string interval = 2;
+  string pair_addr = 3;
+  double open = 4;
+  double high = 5;
+  double low = 6;
+  double close = 7;
+  double mcap_open = 8;
+  double mcap_high = 9;
+  double mcap_low = 10;
+  double mcap_close = 11;
+  double amount_usd = 12;
+  double volume_token = 13;
+  int64 candle_time = 14;
+  int64 buy_count = 15;
+  int64 sell_count = 16;
+  int64 total_count = 17;
+  int64 close_at = 18;
+  int64 open_at = 19;
+  double avg_price = 20;
+  double mkt_cap = 21;
+  double pump_point = 22;
+  string token_addr = 23;
+}
+
+message Kline24InfoItem {
+  double change_24 = 1;
+  uint32 txs_24h = 2;
+  double vol_24h = 3;
+}
+
+message KlineFluctuation {
+  double kline_fluctuation_1m = 1;
+  double kline_fluctuation_5m = 2;
+  double kline_fluctuation_15m = 3;
+  double kline_fluctuation_1h = 4;
+  double kline_fluctuation_4h = 5;
+  double kline_fluctuation_12h = 6;
+  double kline_fluctuation_24h = 7;
+}

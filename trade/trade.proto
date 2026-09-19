@@ -1,0 +1,354 @@
+syntax = "proto3";
+
+package trade;
+option go_package = "./trade";
+
+enum TradeType{
+  TradeTypeNull = 0;
+  Market = 1; // 市价单
+  Limit = 2; // 限价单
+  OneClick = 3; // 一键买卖
+  TokenCapLimit = 4; // 按照市值限价单
+  TrailingStop = 5;  // 移动止损类型
+}
+
+enum SwapType {
+  SwapTypeAll = 0;
+  Buy = 1;
+  Sell = 2;
+}
+
+message CreateLimitOrderRequest {
+  int64 chain_id = 1;
+  string token_ca = 2;
+  SwapType swap_type = 3;
+  string amount = 4;
+  string price_usd = 5;
+  bool double_out = 6;
+  string token_cap = 7;
+}
+
+message CreateLimitOrderResponse {
+  uint64 order_id = 1;
+}
+
+message CancelOrderRequest {
+  int64 order_id = 1;
+}
+
+message CancelOrderResponse {
+}
+
+message CreateMarketOrderRequest {
+  int32 chain_id = 1;
+  string token_ca = 2;
+  SwapType swap_type = 3;
+  string amount_in = 4;
+  bool double_out = 5;
+  bool is_one_click = 6;
+  string user_wallet_address = 7;
+}
+
+message CreateMarketOrderResponse {
+  string tx_hash = 1;
+}
+
+message CreatePoolRequest {
+  int32 chain_id = 1;
+  string token_mint_0 = 2;
+  string token_mint_1 = 3;
+  string initial_price = 4;      // Price of token1 in terms of token0
+  int32 fee_tier = 5;            // Fee tier in basis points (e.g., 30 = 0.3%)
+  int64 open_time = 6;           // Unix timestamp when pool opens
+  string user_wallet_address = 7;
+}
+
+message CreatePoolResponse {
+  string tx_hash = 1;
+}
+
+message QueryCurrentOrdersRequest {
+  int64 trade_type = 1;
+  string token_ca = 2;
+  int64  swap_type = 3;
+  int64 page_no = 4;
+  int64 page_size = 5;
+  int64 chain_id = 6;
+}
+
+enum OrderStatus {
+  OrderStatusAll = 0;
+  Waiting = 1;
+  Proc = 2;
+  OnChain = 3;
+  Fail = 4;
+  Suc = 5;
+  Cancel = 6;
+  FailTimeout = 7;
+}
+
+message QueryOrderInfo {
+  int64 id = 1;
+  int64 chain_id = 2;
+  string token_ca = 3;
+  string token_symbol = 4;
+  string token_icon = 5;
+  int64 trade_type = 6;
+  int64 swap_type = 7;
+  string cap = 8;
+  string amount = 9;
+  string price = 10;
+  string price_usd = 11;
+  string value = 12;
+  string value_usd = 13;
+  int64 status = 14;
+  string tx_hash = 15;
+  int64 create_time = 16;
+  int64 update_time = 17;
+}
+
+message QueryCurrentOrdersResponse {
+  repeated QueryOrderInfo list = 1;
+  int64 total = 2;
+}
+
+message QueryTradeHistoryRequest {
+  TradeType trade_type = 1;
+  SwapType swap_type = 2;
+  string token_ca = 3;
+  FieldName order_field_name = 4;
+  bool order_is_asc = 5;
+  int64 page_no = 6;
+  int64 page_size = 7;
+  int64 chain_id = 8;
+}
+
+message QueryOrderHistoryRequest {
+  TradeType trade_type = 1;
+  SwapType swap_type = 2;
+  string token_ca = 3;
+  FieldName order_field_name = 4;
+  bool order_is_asc = 5;
+  int64 page_no = 6;
+  int64 page_size = 7;
+  int64 chain_id = 8;
+}
+
+enum FieldName {
+  FieldNameNull = 0;
+  Cap = 1;
+  Price = 2;
+  Amount = 3;
+  Value = 4;
+}
+
+message QueryTradeHistoryResponse {
+  repeated QueryOrderInfo list = 1;
+}
+
+message QueryOrderHistoryResponse {
+  repeated QueryOrderInfo list = 1;
+}
+
+enum TransferType{
+  TransferNone = 0;
+  UserTransfer = 1;
+  RebateWithdraw = 2;
+}
+
+message TransferRequest {
+  TransferType transfer_type = 1;
+  int64 request_id = 2; // 业务请求的id，供业务方使用
+  int64 uid = 3;
+  int64 chain_id = 4;
+  int64 wallet_group_id = 5;
+  string wallet_address = 6;
+  string recipient_address = 7;
+  bool is_native = 8; // 是否是原生代币
+  string amount = 9;
+  string token_address = 10; // it is empty if is_native = true
+  int64 decimal = 11; // it is empty if is_native = true
+  string token_program = 12; // it is empty if is_native = true
+}
+
+message TransferResponse {
+  string tx_hash = 1;
+}
+
+enum TransferStatus{
+  TransferStatusNull = 0;
+  TransferProc = 1;
+  TransferOnchain = 2;
+  TransferSuc = 3;
+  TransferFail = 4;
+  TransferTimeout = 5;
+}
+
+message ProcTokenPriceRequest {
+  string token_ca = 1;
+  string price = 2;
+  SwapType swap_type = 3;
+  int64 chain_id = 4;
+}
+
+message ProcTokenPriceResponse {}
+
+message ProcTokenCapRequest {
+  string token_ca = 1;
+  double market_cap = 2;
+  SwapType swap_type = 3;
+}
+
+message ProcTokenCapResponse {}
+
+message CreateTrailingStopRequest {
+  int64 chain_id = 1;
+  string token_ca = 2;
+  string amount = 3;           // 交易数量
+  int32 trailing_percent = 4;  // 回撤百分比
+}
+
+message CreateTrailingStopResponse {
+  uint64 order_id = 1;
+}
+
+message QueryHoldTokenRequest{
+  int64 chain_id = 1;
+  string token_ca = 2;
+}
+
+message QueryHoldTokenResponse{
+  repeated  QueryHoldTokenInfo list = 2;
+}
+
+message tokenInfo{
+  int64  chain_id = 1;
+  string token_ca = 2;
+  string token_name = 3;
+  string token_symbol = 4;
+  string token_icon = 5;
+  string token_supply = 6;
+  string token_price = 7;
+  string token_price_usd = 8;
+  string base_price = 9;
+  string change_24h = 10;
+}
+
+message QueryHoldTokenInfoDetail{
+  string buy_token_average_price = 1;
+  string buy_token_value = 2;
+  string buy_token_average_fdv = 3;
+  string hold_token_value = 4;
+  string sell_token_average_price = 5;
+  string sell_token_value = 6;
+  string unrealized_token_profit = 7;
+  string realized_token_profit = 8;
+  string total_token_profit = 9;
+  string total_token_profit_yield = 10;
+}
+
+message QueryHoldTokenInfo{
+  tokenInfo toke_info = 1;
+  string buy_token_amount = 2;
+  string sell_token_amount = 3;
+  string hold_token_amount = 4;
+  QueryHoldTokenInfoDetail base_standard = 5;
+  // 根据产品需求，这里的usd不是u本位的，而是根据base的值和当前base价格来估算的usd值
+  QueryHoldTokenInfoDetail base_standard_to_usd = 6;
+}
+
+message QueryTransferRequest{
+  TransferType transfer_type = 1;
+  int64 request_id = 2;
+}
+
+message QueryTransferResponse{
+  int64 transfer_type = 1;
+  int64 request_id = 2;
+  int64 uid = 3;
+  int64 chainId = 4;
+  int64 wallet_group_id = 5;
+  string wallet_address = 6;
+  string token_ca = 7;
+  int64 is_native = 8;
+  string amount = 9;
+  string from_address = 10;
+  string to_address = 11;
+  string tx_hash = 12;
+  int64 status = 13; // TransferStatus
+  int64 block_time = 14;
+  int64  create_at = 15;
+  int64 update_at = 16;
+}
+
+message GetGasInfoRequest{
+  int64 chain_id = 1;
+}
+
+message GetGasInfoResponse{
+  repeated GetGasInfo gas_info = 1;
+}
+
+message GetGasInfo {
+  int64 chain_id = 1;
+  string normal = 2;
+  string normal_usd = 3;
+  string fast = 4;
+  string fast_usd = 5;
+  string super_fast = 6;
+  string super_fast_usd = 7;
+  string normal_price = 8;
+  string fast_price = 9;
+  string super_fast_price = 10;
+}
+
+// New message for test RPC
+message TestRpcRequest {
+  string message = 1;
+  int64 value = 2;
+}
+
+message TestRpcResponse {
+  string message = 1;
+  bool success = 2;
+  int64 timestamp = 3;
+}
+
+// New message for Add Liquidity
+message AddLiquidityRequest {
+  int64 chain_id = 1;
+  string pool_id = 2;
+  int64 tick_lower = 3;
+  int64 tick_upper = 4;
+  int32 base_token = 5;  // 0 for token A, 1 for token B
+  string base_amount = 6;
+  string other_amount_max = 7;
+  string user_wallet_address = 8;
+  string token_a_address = 9;
+  string token_b_address = 10;
+}
+
+message AddLiquidityResponse {
+  string tx_hash = 1;
+}
+
+service Trade {
+  rpc CreateLimitOrder(CreateLimitOrderRequest) returns(CreateLimitOrderResponse);
+  rpc CancelOrder(CancelOrderRequest) returns(CancelOrderResponse);
+  rpc CreateMarketOrder(CreateMarketOrderRequest) returns(CreateMarketOrderResponse);
+  rpc CreatePool(CreatePoolRequest) returns(CreatePoolResponse);
+  rpc QueryCurrentOrders(QueryCurrentOrdersRequest) returns(QueryCurrentOrdersResponse);
+  rpc QueryTradeHistory(QueryTradeHistoryRequest) returns(QueryTradeHistoryResponse);
+  rpc QueryOrderHistory(QueryOrderHistoryRequest) returns(QueryOrderHistoryResponse);
+  rpc ProcTokenPrice(ProcTokenPriceRequest)returns(ProcTokenPriceResponse);
+  rpc ProcTokenCap(ProcTokenCapRequest) returns(ProcTokenCapResponse);
+  rpc CreateTrailingStop(CreateTrailingStopRequest) returns(CreateTrailingStopResponse);
+  rpc ProcTrailingStop(ProcTokenPriceRequest) returns(ProcTokenPriceResponse);
+  rpc QueryHoldingToken(QueryHoldTokenRequest) returns(QueryHoldTokenResponse);
+  rpc GetGasInfo(GetGasInfoRequest) returns (GetGasInfoResponse);
+  rpc AddLiquidityV1(AddLiquidityRequest) returns(AddLiquidityResponse);
+  rpc TestRpc(TestRpcRequest) returns(TestRpcResponse);
+  // internal
+  rpc Transfer(TransferRequest) returns(TransferResponse);
+  rpc QueryTransfer(QueryTransferRequest)returns(QueryTransferResponse);
+}

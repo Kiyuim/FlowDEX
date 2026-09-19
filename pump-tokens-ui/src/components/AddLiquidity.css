@@ -1,0 +1,148 @@
+.add-liquidity-container {
+  position: relative;
+  padding: 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid #f3f3f3;
+  border-top: 5px solid #1890ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-message {
+  color: white;
+  font-size: 18px;
+  text-align: center;
+  max-width: 80%;
+}
+
+.result-message {
+  margin-top: 24px;
+  padding: 16px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.result-message h4 {
+  margin-top: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.result-message p {
+  margin-bottom: 0;
+}
+
+.result-message.error {
+  background-color: #ffebee;
+  color: #d32f2f;
+  border: 1px solid #ffcdd2;
+}
+
+.result-message.success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #c8e6c9;
+}
+
+.result-message a {
+  color: #1890ff;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.result-message a:hover {
+  text-decoration: underline;
+}
+
+.add-liquidity-card {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+  border-radius: 16px;
+  border: 1px solid #333;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  margin: 0 auto;
+  max-width: 600px;
+}
+
+.card-header {
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid #333;
+  text-align: center;
+}
+
+.card-header h2 {
+  margin: 0 0 8px 0;
+  color: #fff;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.card-header p {
+  margin: 0;
+  color: #888;
+  font-size: 16px;
+}
+
+.form-section {
+  padding: 24px;
+}
+
+.error-message {
+  background-color: rgba(255, 77, 77, 0.1);
+  border: 1px solid #ff4d4d;
+  color: #ff4d4d;
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.success-message {
+  background-color: rgba(0, 255, 136, 0.1);
+  border: 1px solid #00ff88;
+  color: #00ff88;
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .add-liquidity-card {
+    padding: 0;
+    max-width: 98vw;
+  }
+  .form-section, .card-header {
+    padding: 16px;
+  }
+} 

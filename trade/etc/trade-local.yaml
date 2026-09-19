@@ -1,0 +1,41 @@
+Name: trade.rpc
+ListenOn: 0.0.0.0:8081
+# Etcd:
+#   Hosts:
+#   - 127.0.0.1:2379
+#   Key: trade.rpc
+
+simulate_only: false
+
+Sol:
+  ChainId: 100000
+  #jito 不为空，就用jito地址来发送
+  Jito: "https://devnet.block-engine.jito.wtf/api/v1/transactions"
+  NodeUrl:
+    # Local default (no secret in git). To use Helius locally, override with:
+    #   export SOL_NODE_URL="https://devnet.helius-rpc.com/?api-key=YOUR_KEY"
+    - "https://api.devnet.solana.com"
+  Enable: true
+  UUID: "e322635ed37c12a203af5f1e845278f26c2d46ca"
+
+market_service:
+  target: localhost:8080
+  nonblock: true
+  timeout: 100000  # 3 seconds timeout
+  transport: tcp
+
+
+Mysql:
+  User: root
+  Password: web3ite.fun # Corresponds to the password in docker-compose.yml
+  Host: 127.0.0.1 # Use loopback IP to connect from host to Docker container
+  Port: 3307
+  Dbname: fun_dexs # Database name in docker-compose
+
+
+Redis:
+  Host: 127.0.0.1:6379 # Use loopback IP to connect from host to Docker container
+  Pass: "" # No password set in docker-compose
+  Type: node
+  Key: bizRedis
+  PingTimeout: 10s

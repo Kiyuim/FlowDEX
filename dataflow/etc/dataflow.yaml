@@ -1,0 +1,44 @@
+Name: dataflow.rpc
+ListenOn: 0.0.0.0:8084
+# Etcd:
+#   Hosts:
+#   - 127.0.0.1:2379
+#   Key: dataflow.rpc
+
+
+KqSol:
+  Name: web3fun-kafka
+  Brokers:
+    - 115.159.107.189:9093
+  Group: web3-dataflow-2025
+  Topic: web3fun
+  Offset: last
+  Consumers: 1
+  Processors: 1
+  # SASL 账号/密码不再明文放这里，改由 KAFKA_USERNAME / KAFKA_PASSWORD 环境变量注入
+  # (Railway secret，见 config.go 的 ApplyEnvOverrides)。本地跑 docker-compose 的
+  # Kafka 没有开 SASL，留空即可。
+
+# NOTE: this Mysql/Redis block points at a different (older, pre-Railway)
+# Tencent Cloud / Alibaba Cloud instance than market/trade/consumer's
+# *.railway.internal config — see docs/项目已知问题与修复记录.md for why that's
+# worth double-checking before deploying: if dataflow writes K-lines here while
+# market reads from the Railway-internal DB, the two are silently disconnected.
+Mysql:
+  Master:
+    Path: sh-cdb-d1aqnkzo.sql.tencentcdb.com
+    Port: 26218
+    Dbname: fun_dexs
+    Username: root
+    # Password injected via MYSQL_PASSWORD env var (see config.go ApplyEnvOverrides)
+    MaxIdleConns: 20
+    MaxOpenConns: 50
+
+
+redis:
+  Host: r-uf6ka4mjfgkkgbqlhepd.redis.rds.aliyuncs.com:6379
+  Type: "node"
+  # Pass injected via REDIS_PASSWORD env var (see config.go ApplyEnvOverrides)
+  Tls: false
+  Key: "10"
+  PingTimeout: 10s

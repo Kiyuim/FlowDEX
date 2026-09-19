@@ -1,0 +1,111 @@
+.faucet-container {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 32px 16px;
+}
+
+.faucet-card {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+  border-radius: 16px;
+  border: 1px solid #333;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.card-header {
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid #333;
+  text-align: center;
+}
+
+.card-header h2 {
+  margin: 0 0 8px 0;
+  color: #fff;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.card-header p {
+  margin: 0;
+  color: #888;
+  font-size: 16px;
+}
+
+.faucet-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  padding: 24px;
+}
+
+.faucet-item {
+  background: #181818;
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  transition: box-shadow 0.2s, border-color 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.faucet-item:hover {
+  border-color: #00ff88;
+  box-shadow: 0 4px 16px rgba(0,255,136,0.12);
+}
+
+.faucet-info {
+  flex: 1;
+}
+
+.faucet-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.faucet-desc {
+  font-size: 14px;
+  color: #aaa;
+}
+
+.faucet-link {
+  background: linear-gradient(45deg, #00ff88, #0099ff);
+  color: #000;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(0,255,136,0.08);
+  display: inline-block;
+}
+
+.faucet-link:hover {
+  background: linear-gradient(45deg, #0099ff, #00ff88);
+  color: #000;
+  box-shadow: 0 4px 16px rgba(0,255,136,0.18);
+}
+
+@media (max-width: 600px) {
+  .faucet-list {
+    padding: 16px;
+    gap: 12px;
+  }
+  .faucet-item {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px 12px;
+  }
+  .faucet-link {
+    width: 100%;
+    text-align: center;
+    padding: 12px 0;
+    font-size: 15px;
+  }
+} 

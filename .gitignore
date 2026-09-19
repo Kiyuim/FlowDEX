@@ -1,0 +1,34 @@
+# Go
+*.exe
+*.test
+/cmd/debugtools/*/main
+market/bin/
+websocket/websocket
+websocket/websocket-server
+
+# Node / frontend
+node_modules/
+pump-tokens-ui/build/
+pump-tokens-ui/.env.local
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+
+# Never commit private keys / certs (found web3ite.cab.key + cert chain
+# checked into the working tree — real TLS private key for a live domain,
+# must never enter git history)
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Local editor/IDE
+.idea/
+.vscode/
+
+# Never commit real secrets backed up locally during cleanup
+*DO_NOT_COMMIT*

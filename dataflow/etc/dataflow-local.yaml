@@ -1,0 +1,36 @@
+Name: dataflow.rpc
+ListenOn: 0.0.0.0:8084
+# Etcd:
+#   Hosts:
+#   - 127.0.0.1:2379
+#   Key: dataflow.rpc
+
+
+KqSol:
+  Name: web3fun-kafka
+  Brokers:
+    - 127.0.0.1:29092 # Use loopback IP to connect from host to Docker container
+  Group: web3-dataflow-2025
+  Topic: web3fun
+  Offset: last
+  Consumers: 1
+  Processors: 1
+
+Mysql:
+  Master:
+    Path: 127.0.0.1 # Use loopback IP to connect from host to Docker container
+    Port: 3307
+    Dbname: fun_dexs # Database name in docker-compose
+    Username: root
+    Password: web3ite.fun # Corresponds to the password in docker-compose.yml
+    MaxIdleConns: 20
+    MaxOpenConns: 50
+
+
+redis:
+  Host: 127.0.0.1:6379 # Use loopback IP to connect from host to Docker container
+  Type: "node"
+  Pass: "" # No password set in docker-compose
+  Tls: false
+  Key: "10"
+  PingTimeout: 10s

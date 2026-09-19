@@ -1,0 +1,41 @@
+Name: trade-api
+Host: 0.0.0.0
+Port: 8083
+
+CORSWhitelist:
+- localhost:3000
+- localhost:3001
+- localhost:8080
+- localhost:8081
+- http://localhost:3000
+- http://localhost:3001
+- http://localhost:8080
+- http://localhost:8081
+- chrome-extension://*
+
+Log:
+  Mode: file
+  Path: ./logs
+  Level: info
+  Compress: false
+  KeepDays: 30
+
+Route:
+  # Existing routes (placeholder)
+  
+  # User tokens and pools routes
+  - path: /v1/market/user_tokens
+    method: GET
+    handler: getUserTokens
+    
+  - path: /v1/market/store_user_token
+    method: POST
+    handler: storeUserToken
+    
+  - path: /v1/market/user_pools
+    method: GET
+    handler: getUserPools
+    
+  - path: /v1/market/store_user_pool
+    method: POST
+    handler: storeUserPool 

@@ -1,0 +1,26 @@
+Name: market.rpc
+ListenOn: 0.0.0.0:8080
+# Etcd:
+#   Hosts:
+#   - 127.0.0.1:2379
+#   Key: market.rpc
+
+Mysql:
+  Master:
+    Username: root
+    Password: web3ite.fun # Corresponds to the password in docker-compose.yml
+    Path: 127.0.0.1 # Use loopback IP to connect from host to Docker container
+    Port: 3307
+    Dbname: fun_dexs # Database name in docker-compose
+    MaxOpenConns: 500
+    MaxIdleConns: 200
+
+
+
+BizRedis:
+  Host: 127.0.0.1:6379 # Use loopback IP to connect from host to Docker container
+  Pass: "" # No password set in docker-compose
+  Type: node
+  Key: bizRedis
+  PingTimeout: 10s
+  Tls: false

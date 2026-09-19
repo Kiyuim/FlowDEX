@@ -1,0 +1,15 @@
+# Railway `railway up` builds its upload tarball from this file (preferred over
+# .gitignore). Mirrors .dockerignore. IMPORTANT: unlike .gitignore this must NOT
+# exclude go.sum — the Go build needs it (go.sum is force-tracked in git but
+# .gitignore lists it, which is why `railway up` was dropping it).
+pump-tokens-ui/node_modules
+pump-tokens-ui/build
+**/node_modules
+.git
+*.png
+docs
+template
+tools
+scripts
+docker
+cmd/debugtools

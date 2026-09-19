@@ -1,0 +1,890 @@
+syntax = "proto3";
+
+package market;
+option go_package = "./market";
+
+message Kline {
+  int64 chain_id = 1;
+  string interval = 2;
+  string pair_addr = 3;
+  double open = 4;
+  double high = 5;
+  double low = 6;
+  double close = 7;
+  double mcap_open = 8;
+  double mcap_high = 9;
+  double mcap_low = 10;
+  double mcap_close = 11;
+  double amount_usd = 12;
+  double volume_token = 13;
+  int64 candle_time = 14;
+  int64 buy_count = 15;
+  int64 sell_count = 16;
+  int64 total_count = 17;
+  int64 close_at = 18;
+  int64 open_at = 19;
+  double avg_price = 20;
+  double mkt_cap = 21;
+  double pump_point = 22;
+  string token_addr = 23;
+}
+
+message Klines {
+  repeated Kline list = 1;
+  KlineFluctuation fluctuation = 7;
+}
+
+message KlineFluctuation {
+  double kline_fluctuation_1m = 1;
+  double kline_fluctuation_5m = 2;
+  double kline_fluctuation_15m = 3;
+  double kline_fluctuation_1h = 4;
+  double kline_fluctuation_4h = 5;
+  double kline_fluctuation_12h = 6;
+  double kline_fluctuation_24h = 7;
+}
+
+message Kline24InfoItem {
+  double change_24 = 1;
+  uint32 txs_24h = 2;
+  double vol_24h = 3;
+}
+
+message KlineUp {
+  string chain = 1;
+  string pair_address = 2;
+  uint32 timestamp = 3;
+  string interval = 4;
+  string open = 5;
+  string high = 6;
+  string low = 7;
+  string close = 8;
+  string volume = 11;
+  uint32 swaps = 9;
+  string amount = 10;
+  uint32 buys = 12;
+  string buy_amount = 13;
+  string buy_volume = 14;
+  uint32 sells = 15;
+  string sell_amount = 16;
+  string sell_volume = 17;
+}
+
+message Trade {
+  string pair_address = 1;
+  string tx_hash = 2;
+  string maker = 3;
+  string to = 4;
+  int64 trade_type = 5;
+  double base_token_amount = 6;
+  double token_amount = 7;
+  double base_token_price_usd = 8;
+  double total_usd = 9;
+  double token_price_usd = 10;
+  int64 block_num = 11;
+  int64 block_timestamp = 12;
+  int64 clamp_type = 13;
+  string swap_name = 14;
+  int64 sort = 15;
+}
+
+message Trades {
+  repeated Trade list = 1;
+}
+
+message SearchPairByAddrRequest {
+  int64  chain_id = 1;
+  string address = 2;
+}
+
+message QueryUserHoldersRequest {
+  repeated string address = 1; // 用户所有地址
+  int32 page = 2; // 当前页数
+  int32 size = 3; // 分页大小
+}
+
+message QueryPairContractSafeRequest {
+  int64  chain_id = 1;
+  string  pair_address = 2;
+}
+
+// GetConfig
+message GetConfigRequest {}
+message GetConfigResponse {}
+
+// GetBannerConfig
+message GetBannerConfigRequest {}
+message GetBannerConfigResponse {}
+
+// GetUpdateConfig
+message GetUpdateConfigRequest {}
+message GetUpdateConfigResponse {}
+
+// GetTokenList
+message GetTokenListRequest {
+  int64 chain_id = 1;
+  int32 page_no = 2;
+  int32 page_size = 3;
+  string sorted_type = 4; //热门-查询排序
+  string honeypot_filter = 5;
+  string price_order = 6;
+  string change_order = 7;
+  string honeypot_non_filter = 8;
+}
+message GetTokenListResponse {
+  repeated TokenInfoItem list = 1;
+  int32 total = 2;
+}
+
+message TokenInfoItem {
+  int64 chain_id = 1;               // Chain ID
+  string chain_icon = 2;            // Chain icon URL
+  string token_address = 3;         // Token contract address
+  string token_icon = 4;            // Token icon URL
+  string token_symbol = 5;          // Token name
+  double token_price = 6;           // Current price
+  double change = 7;                // 24h price change
+  double mkt_cap = 8;               // Market capitalization
+  string pair_address = 9;
+  uint32 txs_24h = 10;
+  double vol_24h = 11;
+  int64 hold_count = 12;
+  double change24 = 13;
+  string twitter_username = 14;        // Twitter username
+  string website = 15;                 // Official website
+  double top_holder = 16;
+  double liquidity = 17;
+  int32 freezable = 18;
+  int32 mintable = 19;
+}
+
+// GetPumpTokenList
+message GetPumpTokenListRequest {
+  int64 chain_id = 1;
+  int32 pump_status = 2;
+  string sorted_type = 3;
+  string honeypot_filter = 4;
+  int32 page_no = 5;
+  int32 page_size = 6;
+}
+message GetPumpTokenListResponse {
+  repeated PumpTokenItem list = 1;
+  int32 total = 2;
+}
+
+message PumpTokenItem {
+  int64 chain_id = 1;
+  string chain_icon = 2;
+  string token_address = 3;
+  string token_icon = 4;
+  string token_name = 5;
+  int64 launch_time = 6;
+  double mkt_cap = 7;
+  int64 hold_count = 8;
+  uint32 txs_24h = 9;
+  double vol_24h = 10;
+  double domestic_progress = 11;
+  string twitter_username = 12;
+  string telegram = 13;
+  double change24 = 14;
+  string pair_address = 15;
+}
+
+// GetClmmPoolList
+message GetClmmPoolListRequest {
+  int64 chain_id = 1;
+  int32 pool_version = 2; // 1 for v1, 2 for v2
+  string sorted_type = 3;
+  int32 page_no = 4;
+  int32 page_size = 5;
+}
+message GetClmmPoolListResponse {
+  repeated ClmmPoolItem list = 1;
+  int32 total = 2;
+}
+
+message ClmmPoolItem {
+  int64 chain_id = 1;
+  string chain_icon = 2;
+  string pool_state = 3;           // Pool state address (like pair_address for pumps)
+  string input_vault_mint = 4;     // Input token address
+  string output_vault_mint = 5;    // Output token address
+  string input_token_symbol = 6;   // Input token symbol
+  string output_token_symbol = 7;  // Output token symbol
+  string input_token_icon = 8;     // Input token icon
+  string output_token_icon = 9;    // Output token icon
+  int64 trade_fee_rate = 10;       // Trade fee rate
+  int64 launch_time = 11;          // Pool creation time
+  double liquidity_usd = 12;       // Liquidity in USD
+  uint32 txs_24h = 13;            // 24h transactions
+  double vol_24h = 14;            // 24h volume
+  double apr = 15;                // Annual percentage rate
+  int32 pool_version = 16;        // 1 for v1, 2 for v2
+}
+
+message GetPairInfoByTokensResponse {
+  repeated PairInfo token_info = 1;
+}
+
+message PairInfo{
+  int64 chain_id = 1;  // Chain ID
+  string address = 2;  // Trading pair address
+  string name = 3;  // DEX factory version swap name
+  string factory_address = 4;  // Factory contract address
+  string base_token_address = 5;  // Base token address
+  string token_address = 6;  // Token address
+  string base_token_symbol = 7;  // Base token symbol
+  string token_symbol = 8;  // Token symbol
+  int64 base_token_decimal = 9;  // Base token decimals
+  int64 token_decimal = 10;  // Token decimals
+  bool base_token_is_native_token = 11;  // Is base token native currency
+  bool base_token_is_token0 = 12;  // Is base token token0
+  double init_base_token_amount = 13;  // Initial base token liquidity
+  double init_token_amount = 14;  // Initial token liquidity
+  double current_base_token_amount = 15;  // Current base token liquidity
+  double current_token_amount = 16;  // Current token liquidity
+  double fdv = 17;  // Fully diluted valuation
+  double mkt_cap = 18;  // Market capitalization
+  double token_price = 19;  // Token price
+  double base_token_price = 20;  // Base token price
+  int64 block_num = 21;  // Creation block height
+  int64 block_time = 22;  // Creation block timestamp
+  double highest_token_price = 23;  // Highest token price
+  int64 latest_trade_time = 24;  // Latest on-chain trade timestamp
+}
+
+// SearchTokenPair
+message SearchTokenPairRequest {
+  string type = 1;
+  string content = 2;
+}
+message SearchTokenPairResponse {}
+
+// GetMarketInfo
+message GetMarketInfoRequest {
+  string pair_address = 1;
+}
+message GetMarketInfoResponse {}
+
+// GetPairInfo
+message GetPairInfoRequest {
+  int64 chain_id = 1;
+  string pair_address = 2;
+}
+
+message GetPairInfoResponse {
+  int64 chain_id = 1;  // Chain ID
+  string address = 2;  // Trading pair address
+  string name = 3;  // DEX factory version swap name
+  string factory_address = 4;  // Factory contract address
+  string base_token_address = 5;  // Base token address
+  string token_address = 6;  // Token address
+  string base_token_symbol = 7;  // Base token symbol
+  string token_symbol = 8;  // Token symbol
+  int64 base_token_decimal = 9;  // Base token decimals
+  int64 token_decimal = 10;  // Token decimals
+  bool base_token_is_native_token = 11;  // Is base token native currency
+  bool base_token_is_token0 = 12;  // Is base token token0
+  double init_base_token_amount = 13;  // Initial base token liquidity
+  double init_token_amount = 14;  // Initial token liquidity
+  double current_base_token_amount = 15;  // Current base token liquidity
+  double current_token_amount = 16;  // Current token liquidity
+  double fdv = 17;  // Fully diluted valuation
+  double mkt_cap = 18;  // Market capitalization
+  double token_price = 19;  // Token price
+  double base_token_price = 20;  // Base token price
+  int64 block_num = 21;  // Creation block height
+  int64 block_time = 22;  // Creation block timestamp
+  double highest_token_price = 23;  // Highest token price
+  int64 latest_trade_time = 24;  // Latest on-chain trade timestamp
+
+}
+
+// GetHoldTokenUsers
+message GetHoldTokenUsersRequest {
+  string pair_address = 1;
+}
+message GetHoldTokenUsersResponse {}
+
+// GetLatestTradeInfo
+message GetLatestTradeInfoRequest {
+  int64 chain_id = 1;
+  string pair_address = 2;
+  int32 page_no = 3;
+  int32 page_size = 4;
+  bool fixed = 5;
+  int32 start = 6;
+  int32 end = 7;
+
+}
+
+message GetLatestTradeInfoResponse {
+  int64 total = 1;
+  repeated Trade list = 2;
+}
+
+// CheckPairInfoRisk
+message CheckPairInfoRiskRequest {
+  string pair_address = 1;
+}
+message CheckPairInfoRiskResponse {}
+
+// GetKline
+message GetKlineRequest {
+  int64 chain_id = 1;
+  string pair_address = 2;
+  string interval = 3;
+  int64 from_timestamp = 4;
+  int64 to_timestamp = 5;
+  int64 limit = 6;
+  int64 must_count_back = 7;
+}
+
+message GetKlineResponse {
+  repeated NewKline list = 1;
+}
+
+message NewKline {
+  double open = 4;
+  double high = 5;
+  double low = 6;
+  double close = 7;
+  double volume_token = 13;
+  int64 candle_time = 14;
+}
+
+// GetKlineTag
+message GetKlineTagRequest {
+  string pair_address = 1;
+}
+message GetKlineTagResponse {}
+
+// GetWalletTradeInfoByPair
+message GetWalletTradeInfoByPairRequest {
+  string pair_address = 1;
+  string wallet_address = 2;
+}
+message GetWalletTradeInfoByPairResponse {}
+
+// AuditToken
+message AuditTokenRequest {}
+message AuditTokenResponse {}
+
+// GetKOLPlan
+message GetKOLPlanRequest {}
+message GetKOLPlanResponse {}
+
+// GetTradeInfoByToken
+message GetAmmPoolByPairRequest {
+  int64 chain_id = 1;
+  string pair_address = 2;
+}
+
+message GetAmmPoolByPairResponse {
+  int64 chain_id = 1;
+  string pair_address = 2;
+  oneof pool_information {
+    RaydiumAmmKeys     raydium_amm_keys = 3;
+    PumpFunKeys        pump_fun_keys = 4;
+  }
+}
+
+message GetPoolByPairRequest {
+  int64 chain_id = 1;
+  string pair_address = 2;
+}
+
+message GetPoolByPairResponse {
+  int64 chain_id = 1;
+  string pair_address = 2;
+  oneof pool_information {
+    RaydiumAmmKeys     raydium_amm_keys = 3;
+    PumpFunKeys        pump_fun_keys = 4;
+    RaydiumClmmKeys raydium_clmm_keys = 5;
+  }
+}
+
+message RaydiumAmmKeys {
+  string amm_id = 1;
+  string amm_authority = 2;
+  string amm_open_orders = 3;
+  string amm_target_orders = 4;
+  string pool_coin_token_account = 5;
+  string pool_pc_token_account = 6;
+  string serum_program_id = 7;
+  string serum_market = 8;
+  string serum_bids = 9;
+  string serum_asks = 10;
+  string serum_event_queue = 11;
+  string serum_coin_vault_account = 12;
+  string serum_pc_vault_account = 13;
+  string serum_vault_signer = 14;
+  string create_at = 15;
+  string update_at = 16;
+  string base_mint = 17;
+  string quote_mint = 18;
+}
+
+message PumpFunKeys {
+
+}
+
+message RaydiumClmmKeys {
+  string amm_config = 1;
+  string pool_state = 2;
+  string input_vault = 3;
+  string output_vault = 4;
+  string observation_state = 5;
+  string token_program = 6;
+  string token_program_2022 = 7;
+  string memo_program = 8;
+  string input_vault_mint = 9;
+  string output_vault_mint = 10;
+  string remaining_accounts = 11;
+  int64 trade_fee_rate = 12;
+}
+
+// GetTokenInfo
+message GetTokenInfoRequest {
+  int64 chain_id = 1;
+  string token_address = 2;
+}
+
+message GetTokenInfoByPairRequest {
+  int64 chain_id = 1;
+  string pair_address = 2;
+}
+
+message GetTokenInfoResponse {
+  int64 chain_id = 1;                  // Chain ID
+  string address = 2;                  // Token contract address
+  string name = 3;                     // Token name
+  string symbol = 4;                   // Token symbol
+  int64 decimals = 5;                  // Token decimals
+  double total_supply = 6;             // Total token supply
+  string icon = 7;                     // Token icon URL
+  int64 hold_count = 8;                // Number of holders
+  int64 is_ca_drop_owner = 9;           // Owner rights renounced
+  int64 is_ca_verify = 10;              // Contract verified
+  int64 is_honey_scam = 11;             // Honeypot check (Cannot sell)
+  int64 is_liquid_lock = 12;            // Liquidity locked
+  int64 is_can_pause_trade = 13;        // Can pause trading
+  int64 is_can_change_tax = 14;         // Can modify tax rate
+  int64 is_have_black_list = 15;        // Has blacklist mechanism
+  int64 is_can_all_sell = 16;           // Can sell entire balance
+  int64 is_have_proxy = 17;             // Has proxy contract
+  int64 is_can_external_call = 18;      // Contract can make external calls
+  int64 is_can_add_token = 19;          // Contract has minting capability
+  int64 is_can_change_token = 20;       // Owner can modify user balances
+  double sell_tax = 21;                // Sell tax rate
+  double buy_tax = 22;                 // Buy tax rate
+  string twitter_username = 23;        // Twitter username
+  string website = 24;                 // Official website
+  string telegram = 25;                // Telegram link
+  int64 is_check_ca = 26;               // Contract analysis completed
+  int64 check_ca_at = 27;              // Contract analysis datetime(3)
+  string program = 28;                 // token owner program
+}
+
+message GetPairInfoByTokenRequest {
+  int64 chain_id = 1;
+  string token_address = 2;
+}
+
+message GetPairInfoByTokenResponse {
+  int64 chain_id = 1;  // Chain ID
+  string address = 2;  // Trading pair address
+  string name = 3;  // DEX factory version swap name
+  string factory_address = 4;  // Factory contract address
+  string base_token_address = 5;  // Base token address
+  string token_address = 6;  // Token address
+  string base_token_symbol = 7;  // Base token symbol
+  string token_symbol = 8;  // Token symbol
+  int64 base_token_decimal = 9;  // Base token decimals
+  int64 token_decimal = 10;  // Token decimals
+  bool base_token_is_native_token = 11;  // Is base token native currency
+  bool base_token_is_token0 = 12;  // Is base token token0
+  double init_base_token_amount = 13;  // Initial base token liquidity
+  double init_token_amount = 14;  // Initial token liquidity
+  double current_base_token_amount = 15;  // Current base token liquidity
+  double current_token_amount = 16;  // Current token liquidity
+  double fdv = 17;  // Fully diluted valuation
+  double mkt_cap = 18;  // Market capitalization
+  double token_price = 19;  // Token price
+  double base_token_price = 20;  // Base token price
+  int64 block_num = 21;  // Creation block height
+  int64 block_time = 22;  // Creation block timestamp
+  double highest_token_price = 23;  // Highest token price
+  int64 latest_trade_time = 24;  // Latest on-chain trade timestamp
+}
+
+// GetTokenMarketInfo
+message GetTokenMarketInfoRequest {
+  int64 chain_id = 1;
+  string token_address = 2;
+}
+
+message GetTokenMarketInfoResponse {
+  int64 chain_id = 1;                 // Chain ID
+  string chain_icon = 2;              // Chain icon URL
+  string token_address = 3;           // Token contract address
+  string pair_address = 4;            // Pair contract address
+  string token_symbol = 5;            // Token symbol
+  int64 decimals = 6;                 // Token decimals
+  double total_supply = 7;            // Total token supply
+  string token_icon = 8;              // Token icon URL
+  int64 hold_count = 9;               // Number of holders
+  string dex_name = 10;               // DEX factory version swap name
+  string twitter_username = 11;       // Twitter username
+  string website = 12;                // Official website
+  string telegram = 13;               // Telegram link
+  double init_base_token_amount = 14; // Initial base token liquidity
+  double init_token_amount = 15;      // Initial token liquidity
+  double current_base_token_amount = 16; // Current base token liquidity
+  double current_token_amount = 17;   // Current token liquidity
+  double fdv = 18;                    // Fully diluted valuation
+  double mkt_cap = 19;                // Market capitalization
+  double sell_tax = 20;               // Sell tax rate
+  double buy_tax = 21;                // Buy tax rate
+  bool is_check_ca = 22;              // Contract analysis completed
+  double token_price = 23;            // Token price
+  double base_token_price = 24;       // Base token price
+  double change_24 = 25;              // Token 24 fluctuation
+  uint32 txs_24h = 26;
+  double vol_24h = 27;
+  int64 created_at = 28;
+  bool is_followed = 29;
+  double liquidity = 30;
+  int32 lock_liquidity = 32;
+  int32 freezable = 33;
+  int32 mintable = 34;
+  string base_token_symbol = 35;
+  double domestic_progress = 36;
+  double change_1m = 37;
+  double change_5m = 38;
+  double change_1h = 39;
+  bool ai_tag = 40;
+  string ai_narrative = 41;
+}
+
+message GetTokenHolderListRequest {
+  int64 chain_id = 1;
+  string token_address = 2;
+  int32 page_no = 3;
+  int32 page_size = 4;
+}
+
+message GetTokenHolderListResponse {
+  int32 total = 1;
+  repeated GetTokenHolderListItem list = 2;
+}
+
+message GetTokenHolderListItem {
+  double proportion = 1;
+  double balance = 2;
+  string owner_address = 3;
+}
+
+message FavoriteTokenRequest {
+  int64 chain_id = 1;
+  string pair_address = 2;
+  int32 favorite_type = 3;
+}
+
+message FavoriteTokenResponse {
+  bool flag = 1;
+}
+
+message GetTokenListByAddressesRequest {
+  int64 chain_id = 1;
+  repeated string token_addresses = 2;
+}
+
+message GetTokenListByAddressesResponse {
+  repeated GetTokenListByAddressesItem list = 1;
+}
+
+message GetTokenListByAddressesItem {
+  int64 chain_id = 1;                  // Chain ID
+  string address = 2;                  // Token contract address
+  string symbol = 3;                   // Token symbol
+  string token_icon = 4;
+  int64 create_time = 5;
+}
+
+message GetFluctuationsByPairAddressRequest {
+  string pair_address = 1;
+  string interval = 2;
+}
+
+message GetFluctuationsByPairAddressResponse {
+  string pair_address = 1;
+  double kline_fluctuation_1m = 2;
+  double kline_fluctuation_5m = 3;
+  double kline_fluctuation_15m = 4;
+  double kline_fluctuation_1h = 5;
+  double kline_fluctuation_4h = 6;
+  double kline_fluctuation_12h = 7;
+  double kline_fluctuation_24h = 8;
+}
+
+message GetNativeTokenPriceRequest {
+  int64  chain_id = 1;
+  string search_time = 2;
+}
+
+message GetNativeTokenPriceResponse {
+  double base_token_price_usd = 1;
+}
+
+message GetPumpTokenInfoRequest {
+  int64  chain_id = 1;
+  string token_address = 2;
+}
+
+message GetPairInfoByTokensRequest {
+  int64 chain_id = 1;
+  repeated string token_address = 2;
+}
+
+message GetGasInfoRequest{
+  int64 chain_id = 1;
+}
+
+message GetGasInfoResponse{
+  repeated GetGasInfo gas_info = 1;
+}
+
+message GetGasInfo {
+  int64 chain_id = 1;
+  string normal = 2;
+  string normal_usd = 3;
+  string fast = 4;
+  string fast_usd = 5;
+  string super_fast = 6;
+  string super_fast_usd = 7;
+}
+
+message PushTokenInfoRequest {
+  int64 chain_id = 1;
+  string token_address = 2;
+  string pair_address = 3;
+  double token_price = 4;
+  double mkt_cap = 5;
+  string token_name = 6;
+  string token_symbol = 7;
+  string token_icon = 8;
+  int64 launch_time = 9;
+  int64 hold_count = 10;
+  double change_24 = 11;
+  int64 txs_24h = 12;
+  int32 pump_status = 13;
+}
+
+message PushTokenInfoResponse{
+  int64 chain_id = 1;
+  string token_address = 2;
+  uint32 txs_24h = 3;
+  string vol_24h = 4;
+  string change_24 = 5;
+  string token_price = 6;
+  string mkt_cap = 7;
+}
+
+message GetTokenMarketCapListByAddressesRequest {
+  int64 chain_id = 1;
+  repeated GetTokenMarketCapListRequestItem token_list = 2;
+}
+
+message GetTokenMarketCapListRequestItem {
+  string token_address = 2;
+  int64 create_time = 3;
+}
+
+message GetTokenMarketCapListByAddressesResponse {
+  repeated GetTokenMarketCapListByAddressesItem list = 1;
+}
+
+message GetTokenMarketCapListByAddressesItem {
+  int64 chain_id = 1;
+  string token_address = 2;
+  double mkt_cap = 3;
+  double ath_mkt_cap = 4;
+  string pair_address = 5;
+  double token_price = 6;
+}
+
+message GetTokenBasicListResponse {
+  repeated GetTokenBasicItem list = 1;
+}
+
+message GetTokenBasicItem {
+  int64 chain_id = 1;
+  string token_address = 2;
+  string pair_address = 3;
+  string token_name = 4;
+  string token_symbol = 5;
+  string token_icon = 6;
+  double token_price = 7;
+  double change24 = 8;
+  double total_supply = 9;
+  int64 decimals = 10;
+  string token_price_str = 11;
+  double fdv =12;
+}
+
+message GetChainTokenInfoRequest {
+  int64 chain_id = 1;
+}
+
+message GetChainTokenInfoResponse {
+  int64 chain_id = 1;
+  string token_address = 2;
+  string pair_address = 3;
+  double token_price = 4;
+  double change24 = 5;
+  string token_price_str = 6;
+}
+
+message GetPairsByTimeRequest {
+  int64 chain_id = 1;
+  int64 timestamp = 2;
+}
+
+message GetPairsByTimeResponse {
+  repeated PairInfo list = 1;
+}
+
+message GetKlineByPairsRequest {
+  int64 chain_id = 1;
+  int64 start_time = 2;
+  int64 end_time = 3;
+  repeated string pair_address = 4;
+}
+
+message GetKlineByPairsResponse {
+  repeated Kline list = 1;
+}
+
+// TokenSecurityCheck
+message TokenSecurityCheckRequest {
+  string mint_address = 1; // SPL Token Mint address (base58)
+}
+
+message TokenSecurityCheckResponse {
+  string mint_address = 1;
+  uint64 supply = 2;
+  uint32 decimals = 3;
+  bool is_initialized = 4;
+  string mint_authority = 5;   // "" if none
+  string freeze_authority = 6; // "" if none
+  bool mint_authority_safe = 7;   // true if no mint authority
+  bool freeze_authority_safe = 8; // true if no freeze authority
+  string security_summary = 9;    // e.g. "Safe", "Mint authority risk", etc.
+}
+
+service Market {
+  rpc GetPumpTokenList(GetPumpTokenListRequest) returns (GetPumpTokenListResponse);
+  rpc GetClmmPoolList(GetClmmPoolListRequest) returns (GetClmmPoolListResponse);
+  rpc GetKline(GetKlineRequest) returns (GetKlineResponse);
+  rpc GetPairInfoByToken(GetPairInfoByTokenRequest) returns (GetPairInfoByTokenResponse);
+  rpc GetNativeTokenPrice(GetNativeTokenPriceRequest) returns (GetNativeTokenPriceResponse);
+  rpc PushTokenInfo(PushTokenInfoRequest) returns (PushTokenInfoResponse);
+  rpc GetTokenInfo(GetTokenInfoRequest) returns (GetTokenInfoResponse);
+  rpc TokenSecurityCheck(TokenSecurityCheckRequest) returns (TokenSecurityCheckResponse);
+}
+
+message GetTop10Request{
+  int64 chain_id = 1;
+  string token_address = 2;
+}
+
+message GetTop10Response{
+  double top10 = 1;
+}
+
+
+//Search 
+message GetContractOrTokenInfoRequest{
+  string keyword = 1;  //Contract address or token name (required)
+  int64 chain_id = 2;
+}
+
+
+message GetContractOrToeknInfoResponse{
+  Token token = 1;
+  repeated Token list = 2;
+}
+
+message SearchTrendingRequest{
+  int64 chain_id = 1;
+}
+
+message SearchTrendingResponse{
+  repeated Token list = 1;
+}
+
+message Token{
+  int32 id = 1;                 // Token ID
+  int32 chain_id = 2;            // Chain ID (e.g., 900)
+  string chain_name = 3;         // Chain name (e.g., SOL)
+  string chain_icon = 4;         // Chain icon URL
+  string token_address = 5;      // Token address (e.g., 0x123abc)
+  string token_icon = 6;         // Token icon URL
+  string token_name = 7;         // Token name (e.g., BTC, NUTCOOL)
+  string liq = 8;                // Liquidity
+  string mcap = 9;               // Market cap
+  string pond = 10;              // Pond value
+  string price = 11;             // Price
+  double change_5m = 12;         // Change in the last 5 minutes
+  double change_1h = 13;         // Change in the last 1 hour
+  double change_4h = 14;         // Change in the last 4 hours
+  double change_24h = 15;        // Change in the last 24 hours
+
+  SafetyCheck safety_check = 16;    // Safety check information
+  bool is_followed = 17;            // Whether the token is followe
+  string pair_address = 18;            // Pair address
+  double top_holder = 19;
+  int32 lock_liquidity = 20;
+  int32 freezable = 21;
+  int32 mintable = 22;
+  uint32 txs_24h = 23;
+  double vol_24h = 24;
+  int64 hold_count = 25;
+}
+
+message SafetyCheck {
+  Status is_mintable = 1;
+  Status is_freezable = 2;
+  Status is_lockable = 3;
+}
+
+message AuditInfoRequest {
+  string token_address = 1;
+  int64 chain_id = 2;
+}
+
+message AuditInfoResponse{
+  repeated AuditInfo list = 1;
+}
+
+
+message AuditInfo{
+  string alarm = 1;
+  string quick_intel = 2;
+  string go_plus = 3;
+  Pass pass = 4;
+}
+
+message Pass{
+  string quick_intel = 1;
+  string go_plus = 2;
+}
+
+
+enum Status {
+  UNKNOWN = 0;  // Represents the NULL or uninitialized state
+  FALSE = 1;    // Represents false status
+  TRUE = 2;     // Represents true status
+}
+
