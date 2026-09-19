@@ -5,7 +5,7 @@ const faucets = [
   {
     name: 'Solana Official Faucet',
     url: 'https://faucet.solana.com/',
-    desc: '每8小时可以领取两次 (Official, 2x every 8h)'
+    desc: 'Official, 2x every 8h'
   },
   {
     name: 'solfaucet.com',

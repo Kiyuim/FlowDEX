@@ -232,6 +232,16 @@ func (l *GetClmmPoolListLogic) fetchClmmV2Pools(model solmodel.ClmmPoolInfoV2Mod
 	return pools, err
 }
 
+// wellKnownMints covers native/wrapped tokens that pools trade against but
+// that never go through this app's own token-creation flow, so they're never
+// rows in the sol_token table — without this, tokenMap lookups for them miss
+// and they render as "Unknown" with no icon (e.g. every CLMM pool's wSOL leg).
+var wellKnownMints = map[string]struct{ symbol, icon string }{
+	"So11111111111111111111111111111111111111112": {
+		"SOL", "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
+	},
+}
+
 func (l *GetClmmPoolListLogic) buildClmmPoolItem(poolState, inputMint, outputMint string,
 	tradeFeeRate int64, launchTime int64, tokenMap map[string]*solmodel.Token, poolVersion int32) *market.ClmmPoolItem {
 
@@ -243,6 +253,9 @@ func (l *GetClmmPoolListLogic) buildClmmPoolItem(poolState, inputMint, outputMin
 	if inputToken != nil {
 		inputSymbol = inputToken.Symbol
 		inputIcon = inputToken.Icon
+	} else if wk, ok := wellKnownMints[inputMint]; ok {
+		inputSymbol = wk.symbol
+		inputIcon = wk.icon
 	} else {
 		inputSymbol = "Unknown"
 		inputIcon = ""
@@ -251,6 +264,9 @@ func (l *GetClmmPoolListLogic) buildClmmPoolItem(poolState, inputMint, outputMin
 	if outputToken != nil {
 		outputSymbol = outputToken.Symbol
 		outputIcon = outputToken.Icon
+	} else if wk, ok := wellKnownMints[outputMint]; ok {
+		outputSymbol = wk.symbol
+		outputIcon = wk.icon
 	} else {
 		outputSymbol = "Unknown"
 		outputIcon = ""

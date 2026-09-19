@@ -88,18 +88,18 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
     try {
       setIsLoading(true);
       // Find the pool in the already fetched pools
-      const pool = pools.find(p => p.pool_state === poolId);
+      const pool = pools.find(p => p.poolState === poolId);
       
       if (pool) {
         setPoolInfo({
-          id: pool.pool_state,
+          id: pool.poolState,
           tokenA: {
-            symbol: pool.token0_symbol || 'Token A',
-            address: pool.token0_mint
+            symbol: pool.inputTokenSymbol || 'Token A',
+            address: pool.inputVaultMint
           },
           tokenB: {
-            symbol: pool.token1_symbol || 'Token B',
-            address: pool.token1_mint
+            symbol: pool.outputTokenSymbol || 'Token B',
+            address: pool.outputVaultMint
           },
           price: pool.price || 1,
           minPrice: pool.price * 0.5, // Example - use actual min from API
@@ -124,7 +124,7 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
       setError('');
       
       // Try to find the pool in already fetched pools first
-      const existingPool = pools.find(p => p.pool_state === address);
+      const existingPool = pools.find(p => p.poolState === address);
       
       if (existingPool) {
         setSelectedPool(address);
@@ -149,12 +149,12 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
           setPoolInfo({
             id: address,
             tokenA: {
-              symbol: pool.token0_symbol || 'Token A',
-              address: pool.token0_mint
+              symbol: pool.inputTokenSymbol || 'Token A',
+              address: pool.inputVaultMint
             },
             tokenB: {
-              symbol: pool.token1_symbol || 'Token B',
-              address: pool.token1_mint
+              symbol: pool.outputTokenSymbol || 'Token B',
+              address: pool.outputVaultMint
             },
             price: pool.price || 1,
             minPrice: pool.price * 0.5,
@@ -340,8 +340,8 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
             >
               <option value="">Select a pool</option>
               {pools.map(pool => (
-                <option key={pool.pool_state} value={pool.pool_state}>
-                  {pool.token0_symbol}/{pool.token1_symbol}
+                <option key={pool.poolState} value={pool.poolState}>
+                  {pool.inputTokenSymbol}/{pool.outputTokenSymbol}
                 </option>
               ))}
             </select>
