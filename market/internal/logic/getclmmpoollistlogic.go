@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"time"
 	// "encoding/json"
 	// "fmt"
 
@@ -12,6 +13,17 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
+
+// clmm24hStats holds the trade-derived stats for one pool over the last 24h.
+// CLMM pool rows carry no reserve/vault-balance snapshot anywhere in this
+// pipeline (consumer never indexes vault token balances for CLMM pools), so
+// LiquidityUsd and Apr stay 0 below — computing them honestly would need a
+// separate on-chain vault-balance indexer, not just a DB join. Vol/Txs are
+// real, computed from the trade table.
+type clmm24hStats struct {
+	Txs uint32
+	Vol float64
+}
 
 type GetClmmPoolListLogic struct {
 	ctx    context.Context
@@ -90,6 +102,25 @@ func (l *GetClmmPoolListLogic) GetClmmPoolList(in *market.GetClmmPoolListRequest
 		tokenMap[token.Address] = &token
 	}
 
+	// Trade records store pool_state as pair_addr for CLMM swaps (see
+	// consumer/internal/logic/sol/block/raydium_clmm.go), so 24h volume/tx
+	// count can be joined straight off the trade table.
+	poolStates := make([]string, 0, len(poolList))
+	for _, poolInterface := range poolList {
+		if in.PoolVersion == 1 {
+			poolStates = append(poolStates, poolInterface.(*solmodel.ClmmPoolInfoV1).PoolState)
+		} else {
+			poolStates = append(poolStates, poolInterface.(*solmodel.ClmmPoolInfoV2).PoolState)
+		}
+	}
+	statsMap, err := l.fetch24hStats(in.ChainId, poolStates)
+	if err != nil {
+		// Non-fatal: still return the pool list with zeroed 24h stats rather
+		// than failing the whole request over a stats-only aggregation.
+		logx.Errorf("GetClmmPoolList: fetch24hStats failed: %v", err)
+		statsMap = map[string]clmm24hStats{}
+	}
+
 	// Build response
 	resultList = make([]*market.ClmmPoolItem, 0)
 	for _, poolInterface := range poolList {
@@ -103,6 +134,11 @@ func (l *GetClmmPoolListLogic) GetClmmPoolList(in *market.GetClmmPoolListRequest
 			pool := poolInterface.(*solmodel.ClmmPoolInfoV2)
 			poolItem = l.buildClmmPoolItem(pool.PoolState, pool.InputVaultMint, pool.OutputVaultMint,
 				pool.TradeFeeRate, pool.CreatedAt.Unix(), tokenMap, 2)
+		}
+
+		if stats, ok := statsMap[poolItem.PoolState]; ok {
+			poolItem.Txs_24H = stats.Txs
+			poolItem.Vol_24H = stats.Vol
 		}
 
 		poolItem.ChainId = in.ChainId
@@ -132,6 +168,38 @@ func (l *GetClmmPoolListLogic) GetClmmPoolList(in *market.GetClmmPoolListRequest
 		List:  resultList,
 		Total: int32(len(resultList)),
 	}, nil
+}
+
+// fetch24hStats batch-computes trade count + USD volume over the last 24h for
+// each pool address, keyed by pool_state (== trade.pair_addr for CLMM swaps).
+func (l *GetClmmPoolListLogic) fetch24hStats(chainId int64, poolStates []string) (map[string]clmm24hStats, error) {
+	result := make(map[string]clmm24hStats, len(poolStates))
+	if len(poolStates) == 0 {
+		return result, nil
+	}
+
+	type row struct {
+		PairAddr string
+		Cnt      uint32
+		Vol      float64
+	}
+	var rows []row
+
+	since := time.Now().Add(-24 * time.Hour)
+	err := l.svcCtx.DB.WithContext(l.ctx).
+		Model(&solmodel.Trade{}).
+		Select("pair_addr as pair_addr, COUNT(*) as cnt, COALESCE(SUM(total_usd), 0) as vol").
+		Where("chain_id = ? AND pair_addr IN ? AND block_time >= ?", chainId, poolStates, since).
+		Group("pair_addr").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range rows {
+		result[r.PairAddr] = clmm24hStats{Txs: r.Cnt, Vol: r.Vol}
+	}
+	return result, nil
 }
 
 func (l *GetClmmPoolListLogic) fetchClmmV1Pools(model solmodel.ClmmPoolInfoV1Model, pageNo, pageSize int32) ([]*solmodel.ClmmPoolInfoV1, error) {
@@ -196,12 +264,20 @@ func (l *GetClmmPoolListLogic) buildClmmPoolItem(poolState, inputMint, outputMin
 		OutputTokenSymbol: outputSymbol,
 		InputTokenIcon:    inputIcon,
 		OutputTokenIcon:   outputIcon,
-		TradeFeeRate:      tradeFeeRate,
-		LaunchTime:        launchTime,
-		LiquidityUsd:      0.0, // TODO: Calculate from pool data
-		Txs_24H:           0,   // TODO: Calculate from trade data
-		Vol_24H:           0.0, // TODO: Calculate from trade data
-		Apr:               0.0, // TODO: Calculate APR
-		PoolVersion:       poolVersion,
+		TradeFeeRate: tradeFeeRate,
+		LaunchTime:   launchTime,
+		// LiquidityUsd/Apr: genuinely not computable from data this pipeline
+		// captures — clmm_pool_info_v1/v2 store account addresses only, no
+		// vault reserve amounts are ever indexed, so there is no liquidity
+		// figure to base either metric on. Left at 0 rather than faked; would
+		// need an on-chain vault-balance indexer to do honestly. See
+		// docs/项目已知问题与修复记录.md.
+		LiquidityUsd: 0.0,
+		Apr:          0.0,
+		// Txs_24H/Vol_24H are set by the caller from fetch24hStats (real,
+		// joined off the trade table).
+		Txs_24H:     0,
+		Vol_24H:     0.0,
+		PoolVersion: poolVersion,
 	}
 }

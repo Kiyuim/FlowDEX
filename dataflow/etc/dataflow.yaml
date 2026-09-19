@@ -19,26 +19,25 @@ KqSol:
   # (Railway secret，见 config.go 的 ApplyEnvOverrides)。本地跑 docker-compose 的
   # Kafka 没有开 SASL，留空即可。
 
-# NOTE: this Mysql/Redis block points at a different (older, pre-Railway)
-# Tencent Cloud / Alibaba Cloud instance than market/trade/consumer's
-# *.railway.internal config — see docs/项目已知问题与修复记录.md for why that's
-# worth double-checking before deploying: if dataflow writes K-lines here while
-# market reads from the Railway-internal DB, the two are silently disconnected.
+# Unified onto the same Railway-internal MySQL/Redis that market/trade/consumer
+# use (was previously pointing at a separate, older Tencent/Alibaba instance —
+# see docs/项目已知问题与修复记录.md for why that split was a real problem:
+# dataflow's K-line writes were landing in a database nothing else read from).
 Mysql:
   Master:
-    Path: sh-cdb-d1aqnkzo.sql.tencentcdb.com
-    Port: 26218
+    Path: mysql.railway.internal
+    Port: 3306
     Dbname: fun_dexs
     Username: root
-    # Password injected via MYSQL_PASSWORD env var (see config.go ApplyEnvOverrides)
+    Password: fundexf97b8b8804661555
     MaxIdleConns: 20
     MaxOpenConns: 50
 
 
 redis:
-  Host: r-uf6ka4mjfgkkgbqlhepd.redis.rds.aliyuncs.com:6379
+  Host: redis.railway.internal:6379
   Type: "node"
-  # Pass injected via REDIS_PASSWORD env var (see config.go ApplyEnvOverrides)
+  Pass: ""
   Tls: false
   Key: "10"
   PingTimeout: 10s

@@ -39,8 +39,7 @@ func CalcMinAmountOutByPrice(slipPageBP uint32, amountIn uint64, isBuy bool, pri
 	//根据滑点计算最小输出
 	fmt.Println("tokenOut is:", tokenOut)
 
-	//TODO: 零时处理下 /1000. 现在的计算逻辑更新了。
-	minOut := tokenOut.Mul(AllBpDecimal.Sub(decimal.NewFromUint64(uint64(slipPageBP))).Div(AllBpDecimal).Div(decimal.NewFromInt(1000)))
+	minOut := tokenOut.Mul(AllBpDecimal.Sub(decimal.NewFromUint64(uint64(slipPageBP))).Div(AllBpDecimal))
 	fmt.Println("slippageBp is:", slipPageBP)
 	fmt.Println("minOut is:", minOut)
 	if minOut.IsNegative() || tokenOut.IsNegative() {
