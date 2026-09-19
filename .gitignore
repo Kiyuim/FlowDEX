@@ -38,12 +38,12 @@ logs/
 docs/
 DEPLOY-devnet.md
 
-# Per-environment configs with real (even if internal-only) hostnames/creds.
-# *-local.yaml files stay tracked — those are generic docker-compose configs
-# meant for anyone cloning the repo to run locally.
-market/etc/market.yaml
-trade/etc/trade.yaml
-consumer/etc/consumer.yaml
-dataflow/etc/dataflow.yaml
-gateway/etc/gateway.yaml
-websocket/etc/websocket.yaml
+# NOTE: market/trade/consumer/dataflow/gateway/websocket's etc/*.yaml (non
+# -local) production configs are intentionally tracked, NOT gitignored — the
+# Dockerfile COPYs them at build time and Railway builds straight from this
+# repo, so hiding them breaks the actual deployment (learned this the hard
+# way: it crash-looped every service). The repo is private, and the one
+# value they carry (the Railway-internal MySQL password) was already
+# explicitly approved to stay in-repo. If this repo is ever made public,
+# revisit this — but don't gitignore them again without also fixing how
+# Railway gets its config.

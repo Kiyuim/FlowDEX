@@ -1,0 +1,43 @@
+Name: dataflow.rpc
+ListenOn: 0.0.0.0:8084
+# Etcd:
+#   Hosts:
+#   - 127.0.0.1:2379
+#   Key: dataflow.rpc
+
+
+KqSol:
+  Name: web3fun-kafka
+  Brokers:
+    - 115.159.107.189:9093
+  Group: web3-dataflow-2025
+  Topic: web3fun
+  Offset: last
+  Consumers: 1
+  Processors: 1
+  # SASL 账号/密码不再明文放这里，改由 KAFKA_USERNAME / KAFKA_PASSWORD 环境变量注入
+  # (Railway secret，见 config.go 的 ApplyEnvOverrides)。本地跑 docker-compose 的
+  # Kafka 没有开 SASL，留空即可。
+
+# Unified onto the same Railway-internal MySQL/Redis that market/trade/consumer
+# use (was previously pointing at a separate, older Tencent/Alibaba instance —
+# see docs/项目已知问题与修复记录.md for why that split was a real problem:
+# dataflow's K-line writes were landing in a database nothing else read from).
+Mysql:
+  Master:
+    Path: mysql.railway.internal
+    Port: 3306
+    Dbname: fun_dexs
+    Username: root
+    Password: fundexf97b8b8804661555
+    MaxIdleConns: 20
+    MaxOpenConns: 50
+
+
+redis:
+  Host: redis.railway.internal:6379
+  Type: "node"
+  Pass: ""
+  Tls: false
+  Key: "10"
+  PingTimeout: 10s

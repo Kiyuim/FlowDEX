@@ -1,0 +1,72 @@
+Name: consumer.rpc
+ListenOn: 0.0.0.0:8088
+# Etcd:
+#   Hosts:
+#   - 127.0.0.1:2379
+#   Key: consumer.rpc
+
+Consumer:
+  Concurrency: 1
+
+# Mysql:
+#   User: root
+#   Password: web3ite.fun
+#   Host: localhost
+#   Port: 3306
+#   DBname: fun_dexs
+
+Mysql:
+  # Railway-internal MySQL (private network — no egress/allowlist issues).
+  # Fresh devnet database; schema is self-provisioned on startup.
+  User: root
+  Password: fundexf97b8b8804661555
+  Host: mysql.railway.internal
+  Port: 3306
+  DBname: fun_dexs
+
+
+Sol:
+  ChainId: 100000
+  # Fallback/default only — public devnet RPC is heavily rate-limited. In
+  # production set SOL_NODE_URL / SOL_WSURL env vars (Railway secrets) to your
+  # own Helius endpoint; they override these and keep the API key out of git.
+  NodeUrl:
+    - "https://api.devnet.solana.com"
+  WSUrl: "wss://api.devnet.solana.com"
+
+Redis:
+  # Railway-internal Redis (private network, no auth).
+  Host: redis.railway.internal:6379
+  Pass: ""
+  Type: node
+  Key: bizRedis
+  PingTimeout: 10s
+  Tls: false
+
+market_service:
+  target: market.railway.internal:8080  # separate Railway service (private domain)
+  nonblock: true
+  timeout: 10000  # 10 seconds timeout
+  transport: tcp
+  middlewares:
+    breaker: false
+
+trade_service:
+  target: trade.railway.internal:8081  # separate Railway service (private domain)
+  nonblock: true
+  timeout: 100000  # 3 seconds timeout
+  transport: tcp
+  middlewares:
+    breaker: false
+
+KqSolTrades:
+  Name: web3fun-kafka
+  Brokers:
+    - 115.159.107.189:9093
+  Group: web3-dex-fix-2025
+  Topic: web3fun
+  Offset: last
+  # SASL 账号/密码不再明文放这里，改由 KAFKA_USERNAME / KAFKA_PASSWORD 环境变量注入
+  # (Railway secret，见 config.go 的 ApplyEnvOverrides)。本地跑 docker-compose 的
+  # Kafka 没有开 SASL，留空即可。
+
