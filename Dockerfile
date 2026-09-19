@@ -15,6 +15,9 @@ WORKDIR /src
 
 # Cache root-module deps first
 COPY go.mod go.sum ./
+# vendor-patches must exist before `go mod download` — go.mod's replace
+# directive points at it locally, not a fetchable module.
+COPY vendor-patches ./vendor-patches
 RUN go mod download
 
 COPY . .
