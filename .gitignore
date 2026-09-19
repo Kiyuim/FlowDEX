@@ -32,3 +32,18 @@ logs/
 
 # Never commit real secrets backed up locally during cleanup
 *DO_NOT_COMMIT*
+
+# Internal notes / audit docs and deployment runbook — not meant for a public
+# portfolio repo (course notes, internal bug-tracking, real infra topology)
+docs/
+DEPLOY-devnet.md
+
+# Per-environment configs with real (even if internal-only) hostnames/creds.
+# *-local.yaml files stay tracked — those are generic docker-compose configs
+# meant for anyone cloning the repo to run locally.
+market/etc/market.yaml
+trade/etc/trade.yaml
+consumer/etc/consumer.yaml
+dataflow/etc/dataflow.yaml
+gateway/etc/gateway.yaml
+websocket/etc/websocket.yaml
