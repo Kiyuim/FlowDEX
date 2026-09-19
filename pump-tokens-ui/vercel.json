@@ -3,11 +3,11 @@
   "rewrites": [
     {
       "source": "/direct-api/:path*",
-      "destination": "https://gateway-production-d1ea.up.railway.app/:path*"
+      "destination": "https://flowdex-production.up.railway.app/:path*"
     },
     {
       "source": "/v1/:path*",
-      "destination": "https://gateway-production-d1ea.up.railway.app/v1/:path*"
+      "destination": "https://flowdex-production.up.railway.app/v1/:path*"
     }
   ]
 }
