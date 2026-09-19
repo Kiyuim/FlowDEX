@@ -10,7 +10,7 @@ const PoolHub = () => {
 
   return (
     <div>
-      <div className="tab-navigation" style={{ marginBottom: 16 }}>
+      <div className="tab-navigation" style={{ marginBottom: 16, justifyContent: 'center' }}>
         <button
           className={`tab-btn ${subTab === 'create' ? 'active' : ''}`}
           onClick={() => setSubTab('create')}

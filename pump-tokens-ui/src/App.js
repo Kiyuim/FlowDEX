@@ -527,53 +527,55 @@ function App() {
           <WalletListDebugger />
           <div>
             <header className="app-header">
-              <div className="app-brand">
-                <span>◆ FlowDEX</span>
-                <span className="devnet-badge">DEVNET</span>
-              </div>
-              <div className="tab-navigation">
-                <button
-                  className={`tab-btn ${activeTab === 'tokens' ? 'active' : ''}`}
-                  onClick={() => handleTabSwitch('tokens')}
-                >
-                  🪙 Tokens
-                </button>
-                <button
-                  className={`tab-btn ${activeTab === 'create-token' ? 'active' : ''}`}
-                  onClick={() => handleTabSwitch('create-token')}
-                >
-                  🪙 Create Token
-                </button>
-                <button
-                  className={`tab-btn ${activeTab === 'pool' ? 'active' : ''}`}
-                  onClick={() => handleTabSwitch('pool')}
-                >
-                  🏊 Pool
-                </button>
-                <button
-                  className={`tab-btn ${activeTab === 'sources' ? 'active' : ''}`}
-                  onClick={() => handleTabSwitch('sources')}
-                >
-                  📁 Sources
-                </button>
-                <button
-                  className={`tab-btn ${activeTab === 'portfolio' ? 'active' : ''}`}
-                  onClick={() => handleTabSwitch('portfolio')}
-                >
-                  👤 Portfolio
-                </button>
-                <button
-                  className={`tab-btn ${activeTab === 'faucet' ? 'active' : ''}`}
-                  onClick={() => handleTabSwitch('faucet')}
-                >
-                  🚰 Faucet
-                </button>
-                <button
-                  className={`tab-btn ${activeTab === 'token-security' ? 'active' : ''}`}
-                  onClick={() => handleTabSwitch('token-security')}
-                >
-                  🛡️ Token Security
-                </button>
+              <div className="app-header-left">
+                <div className="app-brand">
+                  <span>◆ FlowDEX</span>
+                  <span className="devnet-badge">DEVNET</span>
+                </div>
+                <div className="tab-navigation">
+                  <button
+                    className={`tab-btn ${activeTab === 'tokens' ? 'active' : ''}`}
+                    onClick={() => handleTabSwitch('tokens')}
+                  >
+                    🪙 Tokens
+                  </button>
+                  <button
+                    className={`tab-btn ${activeTab === 'sources' ? 'active' : ''}`}
+                    onClick={() => handleTabSwitch('sources')}
+                  >
+                    📁 Sources
+                  </button>
+                  <button
+                    className={`tab-btn ${activeTab === 'portfolio' ? 'active' : ''}`}
+                    onClick={() => handleTabSwitch('portfolio')}
+                  >
+                    👤 Portfolio
+                  </button>
+                  <button
+                    className={`tab-btn ${activeTab === 'create-token' ? 'active' : ''}`}
+                    onClick={() => handleTabSwitch('create-token')}
+                  >
+                    🪙 Create
+                  </button>
+                  <button
+                    className={`tab-btn ${activeTab === 'pool' ? 'active' : ''}`}
+                    onClick={() => handleTabSwitch('pool')}
+                  >
+                    🏊 Pools
+                  </button>
+                  <button
+                    className={`tab-btn ${activeTab === 'faucet' ? 'active' : ''}`}
+                    onClick={() => handleTabSwitch('faucet')}
+                  >
+                    🚰 Faucet
+                  </button>
+                  <button
+                    className={`tab-btn ${activeTab === 'token-security' ? 'active' : ''}`}
+                    onClick={() => handleTabSwitch('token-security')}
+                  >
+                    🛡️ Security
+                  </button>
+                </div>
               </div>
               <CustomWalletButton />
             </header>

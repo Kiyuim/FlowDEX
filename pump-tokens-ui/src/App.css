@@ -15,12 +15,23 @@
 }
 
 .app-header {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
-  padding: 16px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px 20px;
   border-bottom: 1px solid #2a2a2a;
+  flex-wrap: wrap;
+}
+
+.app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .app-brand {
@@ -44,18 +55,11 @@
   letter-spacing: 0.5px;
 }
 
-.app-header > .tab-navigation {
-  justify-self: center;
-}
-
-.app-header > *:last-child {
-  justify-self: end;
-}
-
 /* Tab Navigation */
 .tab-navigation {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .tab-btn {

@@ -7,7 +7,7 @@ const Portfolio = ({ onTokenSelect }) => {
 
   return (
     <div>
-      <div className="tab-navigation" style={{ marginBottom: 16 }}>
+      <div className="tab-navigation" style={{ marginBottom: 16, justifyContent: 'center' }}>
         <button
           className={`tab-btn ${subTab === 'tokens' ? 'active' : ''}`}
           onClick={() => setSubTab('tokens')}
