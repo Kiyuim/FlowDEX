@@ -159,11 +159,23 @@ const CustomWalletButton = () => {
       }
 
       // Select the wallet, then let the useLayoutEffect above call connect()
-      // once `wallet` has actually updated to this new selection.
+      // once `wallet` has actually updated to this new selection. But if
+      // this wallet was ALREADY selected (e.g. wallet-adapter restored it
+      // from localStorage on mount), select() is a no-op and `wallet`'s
+      // reference never changes — the effect would then never re-fire and
+      // the pending connect would sit unconsumed forever (clicking Solflare
+      // would "select" it again but nothing would visibly happen). Connect
+      // immediately in that case instead of waiting for a change that isn't
+      // coming.
+      const alreadySelected = wallet?.adapter?.name === walletName;
       try {
         select(walletName);
         console.log('✅ Wallet selected:', walletName);
-        pendingConnectRef.current = true;
+        if (alreadySelected) {
+          doConnect();
+        } else {
+          pendingConnectRef.current = true;
+        }
       } catch (selectError) {
         console.error('❌ Error selecting wallet:', selectError);
         alert(`Failed to select wallet: ${selectError.message}`);
