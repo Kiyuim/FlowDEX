@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"dex/market/internal/constants"
+	"dex/market/internal/logic"
 	"dex/market/internal/svc"
 	"dex/market/market"
 	"dex/model/solmodel"
@@ -105,6 +106,17 @@ func (l *PumpTicker) UpdateCache() {
 		for _, token := range tokenList {
 			tokenMap[token.Address] = &token
 		}
+		tokenHolderMap := logic.FetchHolderCounts(l.ctx, l.sc.DB, int64(chainId), tokanAddresses, tokenMap)
+
+		pairAddresses := make([]string, 0, len(pairList))
+		for _, pair := range pairList {
+			pairAddresses = append(pairAddresses, pair.Address)
+		}
+		statsMap, err := logic.Fetch24hStats(l.ctx, l.sc.DB, int64(chainId), pairAddresses)
+		if err != nil {
+			logx.Errorf("PumpTicker.UpdateCache: fetch24hStats failed for status %d: %v", status, err)
+			statsMap = map[string]logic.PumpToken24hStats{}
+		}
 
 		list := make([]*market.PumpTokenItem, 0)
 		for _, pair := range pairList {
@@ -121,7 +133,7 @@ func (l *PumpTicker) UpdateCache() {
 				telegram = token.Telegram
 			}
 
-			list = append(list, &market.PumpTokenItem{
+			item := &market.PumpTokenItem{
 				ChainId:          pair.ChainId,
 				ChainIcon:        chain.ChainId2ChainIcon(100000),
 				TokenAddress:     pair.TokenAddress,
@@ -129,11 +141,22 @@ func (l *PumpTicker) UpdateCache() {
 				TokenName:        pair.TokenSymbol,
 				LaunchTime:       pair.BlockTime.Unix(),
 				MktCap:           pair.Fdv,
+				HoldCount:        tokenHolderMap[pair.TokenAddress],
 				DomesticProgress: pair.PumpPoint,
 				TwitterUsername:  twitterUsername,
 				Telegram:         telegram,
 				PairAddress:      pair.Address,
-			})
+			}
+
+			if stats, ok := statsMap[pair.Address]; ok {
+				item.Txs_24H = stats.Txs
+				item.Vol_24H = stats.Vol
+				if stats.FirstPrice > 0 {
+					item.Change24 = (stats.LastPrice - stats.FirstPrice) / stats.FirstPrice * 100
+				}
+			}
+
+			list = append(list, item)
 		}
 
 		// update the cache with the latest data
@@ -216,14 +239,23 @@ func (l *PumpTicker) UpdateNewCreationCache() {
 		for _, token := range tokenList {
 			tokenMap[token.Address] = &token
 		}
+		tokenHolderMap := logic.FetchHolderCounts(l.ctx, l.sc.DB, int64(chainId), tokanAddresses, tokenMap)
+
+		pairAddresses := make([]string, 0, len(pairList))
+		for _, pair := range pairList {
+			pairAddresses = append(pairAddresses, pair.Address)
+		}
+		statsMap, err := logic.Fetch24hStats(l.ctx, l.sc.DB, int64(chainId), pairAddresses)
+		if err != nil {
+			logx.Errorf("PumpTicker.UpdateNewCreationCache: fetch24hStats failed for status %d: %v", status, err)
+			statsMap = map[string]logic.PumpToken24hStats{}
+		}
 
 		list := make([]*market.PumpTokenItem, 0)
 		for _, pair := range pairList {
 			// if pair.TokenPrice == 0 {
 			// 	continue
 			// }
-
-			fmt.Println("pair value is:", pair)
 
 			// Get token from map with nil check
 			token := tokenMap[pair.TokenAddress]
@@ -234,7 +266,7 @@ func (l *PumpTicker) UpdateNewCreationCache() {
 				telegram = token.Telegram
 			}
 
-			list = append(list, &market.PumpTokenItem{
+			item := &market.PumpTokenItem{
 				ChainId:          pair.ChainId,
 				ChainIcon:        chain.ChainId2ChainIcon(100000),
 				TokenAddress:     pair.TokenAddress,
@@ -242,14 +274,23 @@ func (l *PumpTicker) UpdateNewCreationCache() {
 				TokenName:        pair.TokenSymbol,
 				LaunchTime:       pair.BlockTime.Unix(),
 				MktCap:           pair.Fdv,
+				HoldCount:        tokenHolderMap[pair.TokenAddress],
 				DomesticProgress: pair.PumpPoint,
 				TwitterUsername:  twitterUsername,
 				Telegram:         telegram,
 				PairAddress:      pair.Address,
-			})
-		}
+			}
 
-		fmt.Println("list length is:", len(list))
+			if stats, ok := statsMap[pair.Address]; ok {
+				item.Txs_24H = stats.Txs
+				item.Vol_24H = stats.Vol
+				if stats.FirstPrice > 0 {
+					item.Change24 = (stats.LastPrice - stats.FirstPrice) / stats.FirstPrice * 100
+				}
+			}
+
+			list = append(list, item)
+		}
 
 		// update the cache with the latest data
 		listData, err := json.Marshal(list)
