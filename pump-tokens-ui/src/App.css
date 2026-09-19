@@ -14,6 +14,44 @@
   padding: 20px;
 }
 
+.app-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: bold;
+  color: #00ff88;
+  white-space: nowrap;
+}
+
+.devnet-badge {
+  font-size: 11px;
+  font-weight: bold;
+  color: #00d4aa;
+  background: rgba(0, 212, 170, 0.12);
+  border: 1px solid rgba(0, 212, 170, 0.4);
+  border-radius: 10px;
+  padding: 2px 8px;
+  letter-spacing: 0.5px;
+}
+
+.app-header > .tab-navigation {
+  justify-self: center;
+}
+
+.app-header > *:last-child {
+  justify-self: end;
+}
+
 /* Tab Navigation */
 .tab-navigation {
   display: flex;

@@ -12,8 +12,9 @@ import {
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
   getAssociatedTokenAddress,
-  TOKEN_PROGRAM_ID,
-  TOKEN_2022_PROGRAM_ID
+  TOKEN_PROGRAM_ID
+  // TODO: bring back TOKEN_2022_PROGRAM_ID once real Token-2022 minting is
+  // implemented (createInitializeMint2Instruction + the 2022 ATA derivation).
 } from '@solana/spl-token';
 import './TokenCreation.css';
 
@@ -32,7 +33,6 @@ const TokenCreation = () => {
     supply: 1000000,
     description: '',
     image: '',
-    useToken2022: true,
     freezeAuthority: true,
     updateAuthority: true
   });
@@ -244,26 +244,14 @@ const TokenCreation = () => {
         </div>
 
         <div className="form-section">
+          {/* TODO: real Token-2022 minting support (createInitializeMint2Instruction +
+              TOKEN_2022_PROGRAM_ID + the 2022-variant ATA derivation). Removed the toggle
+              that used to sit here — it never actually switched programs (tokenProgram
+              was hardcoded to TOKEN_PROGRAM_ID below), so it looked like a real setting
+              but silently did nothing. Every token this form creates is Classic SPL
+              Token for now. */}
           <div className="program-selector">
-            <label className="toggle-label">
-              <input
-                type="checkbox"
-                name="useToken2022"
-                checked={formData.useToken2022}
-                onChange={handleInputChange}
-              />
-              <span className="toggle-slider"></span>
-              <span className="toggle-text">
-                {formData.useToken2022 ? '🆕 Token-2022' : '📜 Token Program'}
-              </span>
-            </label>
-            <div className="program-info">
-              {formData.useToken2022 ? (
-                <span className="info-text">🚧 Token-2022 coming soon! Currently using Token Program.</span>
-              ) : (
-                <span className="info-text">🔒 Classic token program (widely supported)</span>
-              )}
-            </div>
+            <span className="info-text">🔒 Classic SPL Token program (Token-2022 not supported yet)</span>
           </div>
 
           <div className="input-grid">

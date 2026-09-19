@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import Header from './components/Header';
 import TokenList from './components/TokenList';
 import TradingViewChart from './components/TradingViewChart';
 import WalletDebugger from './components/WalletDebugger';
@@ -555,46 +554,43 @@ function App() {
         <WalletModalProvider>
           <WalletListDebugger />
           <div>
-            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px' }}>
+            <header className="app-header">
+              <div className="app-brand">
+                <span>◆ FlowDEX</span>
+                <span className="devnet-badge">DEVNET</span>
+              </div>
               <div className="tab-navigation">
-                <button 
+                <button
                   className={`tab-btn ${activeTab === 'tokens' ? 'active' : ''}`}
                   onClick={() => handleTabSwitch('tokens')}
                 >
                   🪙 Tokens
                 </button>
-                <button 
-                  className={`tab-btn ${activeTab === 'chart' ? 'active' : ''}`}
-                  onClick={() => handleTabSwitch('chart')}
-                  disabled={!selectedToken}
-                >
-                  📈 Chart
-                </button>
-                <button 
+                <button
                   className={`tab-btn ${activeTab === 'create-token' ? 'active' : ''}`}
                   onClick={() => handleTabSwitch('create-token')}
                 >
                   🪙 Create Token
                 </button>
-                <button 
+                <button
                   className={`tab-btn ${activeTab === 'create-pool' ? 'active' : ''}`}
                   onClick={() => handleTabSwitch('create-pool')}
                 >
                   🏊 Create Pool
                 </button>
-                <button 
+                <button
                   className={`tab-btn ${activeTab === 'add-liquidity' ? 'active' : ''}`}
                   onClick={() => handleTabSwitch('add-liquidity')}
                 >
                   💧 Add Liquidity
                 </button>
-                <button 
+                <button
                   className={`tab-btn ${activeTab === 'faucet' ? 'active' : ''}`}
                   onClick={() => handleTabSwitch('faucet')}
                 >
                   🚰 Faucet
                 </button>
-                <button 
+                <button
                   className={`tab-btn ${activeTab === 'token-security' ? 'active' : ''}`}
                   onClick={() => handleTabSwitch('token-security')}
                 >

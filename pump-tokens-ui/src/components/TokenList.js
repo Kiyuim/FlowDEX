@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import TokenCard from './TokenCard';
 import useTokenListWebSocket from '../hooks/useTokenListWebSocket';
-import MockTokenWebSocket from './MockTokenWebSocket';
 import './TokenList.css';
 
 const API_BASE_URL = process.env.NODE_ENV === 'development' 
@@ -27,7 +26,6 @@ const TokenList = ({ onTokenSelect }) => {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [realtimeCount, setRealtimeCount] = useState(0);
   const [newTokenNotifications, setNewTokenNotifications] = useState([]);
-  const [mockMode, setMockMode] = useState(false);
   const intervalRef = useRef(null);
   const setupCountRef = useRef(0);
   const componentIdRef = useRef(Math.random().toString(36).substr(2, 9));
@@ -527,24 +525,6 @@ const TokenList = ({ onTokenSelect }) => {
             🔄 Manual Refresh
           </button>
           
-          {activeTab === 'pumpfun' && (
-            <button 
-              onClick={() => setMockMode(!mockMode)}
-              style={{
-                background: mockMode ? 'linear-gradient(45deg, #ff6b35, #f7931e)' : '#333',
-                color: mockMode ? '#fff' : '#888',
-                border: '1px solid ' + (mockMode ? '#ff6b35' : '#555'),
-                padding: '6px 12px',
-                borderRadius: '6px',
-                fontSize: '12px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {mockMode ? '🧪 Mock ON' : '🔌 Real Mode'}
-            </button>
-          )}
         </div>
 
         {/* New Token Notifications */}
@@ -580,14 +560,6 @@ const TokenList = ({ onTokenSelect }) => {
       {/* Content Area */}
       {activeTab === 'pumpfun' ? renderPumpFunContent() : renderClmmContent()}
       
-      {/* Mock WebSocket for testing (PumpFun only) */}
-      {activeTab === 'pumpfun' && (
-        <MockTokenWebSocket 
-          enabled={mockMode}
-          onNewToken={handleNewToken}
-          onTokenUpdate={handleTokenUpdate}
-        />
-      )}
     </div>
   );
 };
