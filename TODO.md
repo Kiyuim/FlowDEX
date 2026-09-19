@@ -2,6 +2,19 @@
 
 ## Done this round (2026-09-20)
 
+- **Candlestick click-to-inspect**: clicking a candle in `TradingViewChart`
+  shows a floating card (O/H/L/C/Vol/% change, timestamp) at the click
+  point, via `lightweight-charts`' `subscribeClick` — GMGN-style chart
+  interaction.
+- **Header spacing**: `.tab-btn` padding (12px/20px) made the nav row much
+  taller than the brand text, inflating the gap to the header's bottom
+  border. Tightened button and header padding.
+- **Wallet connect silently doing nothing**: the `useLayoutEffect` fix for
+  the first-click race only re-fires when `wallet`'s reference actually
+  changes. If wallet-adapter had already restored the same wallet from
+  localStorage, `select()` is a no-op, `wallet` never changes, and the
+  pending connect sat unconsumed forever — clicking did nothing. Now
+  connects immediately when the clicked wallet was already selected.
 - **Real token/pool price**: `PumpTokenItem.Price` / `ClmmPoolItem.Price` now
   carry the last real trade price (from `trade`), replacing `TokenCard.js`'s
   hardcoded `$0.00`.
@@ -61,9 +74,6 @@
 
 ## Still open
 
-- **Candlestick click → info popup (GMGN-style)**: requested, not started.
-  Needs checking what charting library `TradingViewChart.js` actually uses
-  and whether it exposes a click/crosshair callback to hook a tooltip into.
 - **Create Token: PumpMeteora / PumpMeteora V2 launch targets**: requested,
   not started. Needs understanding the PumpMeteora on-chain program
   interface (bonding curve init instruction, fixed decimals/supply per the
