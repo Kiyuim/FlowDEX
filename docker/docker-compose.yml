@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: web3ite.fun
-      MYSQL_DATABASE: fun_dexs
+      MYSQL_DATABASE: flowdex
     # Host port 3307, not 3306 — many dev machines already run a native MySQL
     # bound to 127.0.0.1:3306, which silently wins over Docker's port-forward
     # for loopback connections and made this impossible to debug.

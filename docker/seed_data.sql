@@ -1,7 +1,7 @@
 -- Auto-generated demo seed data for interview/demo purposes.
 -- Fictional tokens/trades — NOT real pump.fun/Solana on-chain data.
 SET NAMES utf8mb4;
-USE fun_dexs;
+USE flowdex;
 
 -- tokens
 INSERT INTO `token` (`chain_id`,`address`,`program`,`name`,`symbol`,`decimals`,`total_supply`,`icon`,`description`,`hold_count`,`is_honey_scam`,`is_have_black_list`,`sell_tax`,`buy_tax`,`twitter_username`,`website`,`telegram`,`is_check_ca`,`slot`) VALUES (100000, 'h82pJGF9p7kpzb6eU326EFZf2cDnimbTFVeJtx1qtBmU', 'pumpfun', 'PepeSol', 'PEPESOL', 6, 1000000000, 'https://example.com/token-icons/pepesol.png', 'Demo token seeded for local/interview walkthrough.', 208, 0, 0, 0, 0, '', '', '', 1, 300392704);

@@ -20,7 +20,7 @@ Mysql:
   Master:
     Path: 127.0.0.1 # Use loopback IP to connect from host to Docker container
     Port: 3307
-    Dbname: fun_dexs # Database name in docker-compose
+    Dbname: flowdex # Database name in docker-compose
     Username: root
     Password: web3ite.fun # Corresponds to the password in docker-compose.yml
     MaxIdleConns: 20

@@ -39,7 +39,7 @@ Mysql:
   Password: x
   Host: 127.0.0.1
   Port: 3306
-  Dbname: fun_dexs
+  Dbname: flowdex
 market_service:
   target: localhost:8080
   nonblock: true
