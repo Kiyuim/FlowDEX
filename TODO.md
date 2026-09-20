@@ -1,5 +1,43 @@
 # TODO
 
+## Frontend replaced with the reference implementation (2026-09-20)
+
+Swapped `pump-tokens-ui`'s entire `src/` for the more complete reference
+build (pump-tokens-ui.vercel.app) instead of continuing to rebuild its
+features piecemeal. Traced the live site to the `devnet` branch of
+`github.com/dreamerinsgp/fun_dex_v2` by matching commit SHAs against that
+site's own Vercel deployment history (the repo's default `main` branch is
+an older, less-featured snapshot — the advanced code is only on `devnet`).
+
+Brings in: full trading terminal (`pages/TokenDetail.js` — pool reserves,
+recent trades, buy/sell, limit orders, trailing stop, "double out"),
+`pages/Portfolio.js`, `pages/Pools.js`, `pages/TokenSource.js`, a real
+PumpMeteora integration (`lib/meteora.js`), React Router navigation, and a
+Tailwind-based design system. Kept this project's own `vercel.json`
+(already pointed at this project's Railway backend) and `craco.config.js`
+(vm-browserify polyfill); merged in the new deps (tailwindcss/postcss/
+autoprefixer, react-hot-toast, react-router-dom). Rebranded "FunDex" to
+"FlowDEX"; translated the one file with user-facing Chinese strings
+(AddLiquidityHeader's auto-fetch status messages) to English.
+
+**Action needed**: this reference code reads a couple of env vars this
+project's Vercel project may not have set yet — check/add:
+- `REACT_APP_WS_URL` — the Railway websocket service's public URL (used
+  for the live token-list feed; without it, falls back to a same-origin
+  `wss://` that Vercel won't proxy, so live updates silently won't connect
+  — not a crash, just a missing feature).
+- `REACT_APP_HELIUS_API_KEY` / `REACT_APP_KLINE_WS_URL` — likely already
+  set from earlier work; confirm they still apply.
+- `REACT_APP_SOLANA_RPC_URL` — optional, only needed to override the
+  Helius-key-derived endpoint.
+
+Build verified clean locally and confirmed live (new bundle hash, contains
+`PumpMeteora`/`TokenDetail`/`TradePanel`) — not yet manually exercised
+end-to-end in a browser against this project's backend, so there may be
+API-shape mismatches to fix as they turn up (this backend evolved a lot
+this session — price fields, Portfolio RPCs, CLMM fixes — the reference's
+frontend expectations haven't been cross-checked against all of it).
+
 ## Done this round (2026-09-20)
 
 - **Candlestick click-to-inspect**: clicking a candle in `TradingViewChart`
@@ -132,7 +170,3 @@
   unknown program risks building transactions that either fail outright or
   behave unexpectedly on-chain. Needs the program ID + IDL from wherever
   this reference originally came from.
-- **Wallet-select modal off-center / "on the right side"**: reviewed the
-  code — `position:fixed; inset:0; flex-center` is textbook-correct. Couldn't
-  reproduce a bug in our own modal; likely the wallet browser extension's own
-  OS-level popup, which we don't control.
