@@ -85,6 +85,15 @@
   FlowDEX. Nav now scrolls horizontally within its own row instead of
   wrapping.
 
+## Done this round, continued
+
+- **Token-2022 minting implemented**: the toggle now actually works —
+  `createInitializeMintInstruction`, `createAssociatedTokenAccountInstruction`,
+  and `createMintToInstruction` all receive the selected `programId`
+  (previously hardcoded to `TOKEN_PROGRAM_ID` regardless of any toggle, the
+  same bug pattern as the earlier fake toggle). Mint sizing uses
+  `getMintLen([])` instead of a hardcoded 82-byte constant.
+
 ## Still open
 
 - **Create Token: PumpMeteora / PumpMeteora V2 launch targets**: requested,
@@ -95,10 +104,6 @@
   code — `position:fixed; inset:0; flex-center` is textbook-correct. Couldn't
   reproduce a bug in our own modal; likely the wallet browser extension's own
   OS-level popup, which we don't control.
-- **Token-2022 minting**: `TokenCreation.js` always creates a Classic SPL
-  Token (`TOKEN_PROGRAM_ID` hardcoded). Needs
-  `createInitializeMint2Instruction` + `TOKEN_2022_PROGRAM_ID` + the
-  Token-2022-specific ATA derivation.
 - **Solana transaction deserialization**: `blocto/solana-go-sdk` fails to
   parse a chunk of real devnet blocks even after the vendored
   `MaxSupportedTransactionVersion` patch (`failed to deserialize
