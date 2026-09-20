@@ -163,11 +163,13 @@ export default function TradePanel({ token, currentPriceUsd, onLimitOrderPlaced,
         setAttachTrail(false);
         onLimitOrderPlaced?.(); // the order (and later its auto sell) shows in the orders panel
       }
-      setTimeout(refreshBalances, 2500);
-      // Pool reserves/recent-trades/price all poll on their own interval
-      // (15-20s) — without this, the page just looks unchanged right after
-      // a trade until the next scheduled poll happens to land.
-      setTimeout(() => onTradeComplete?.(), 2500);
+      // The tx is confirmed at this point, so balances can be re-read now;
+      // read again shortly after in case the RPC node lags the confirmation.
+      refreshBalances();
+      setTimeout(refreshBalances, 1500);
+      setTimeout(refreshBalances, 4000);
+      onTradeComplete?.();
+      setTimeout(() => onTradeComplete?.(), 3000);
     } catch (e) {
       toast.error(`${side === 'buy' ? 'Buy' : 'Sell'} failed: ${e.message || e}`, { id: t });
     } finally {
