@@ -104,6 +104,10 @@ func main() {
 		// 生产者
 		sg.Add(slot.NewSlotServiceGroup(ctx, realChan, historyChan))
 
+		// Signature-driven indexing for our own launch programs — lands their
+		// trades/creates in seconds regardless of slot-scanner backlog.
+		sg.Add(block.NewProgramWatcher(ctx))
+
 		solTicker := ticker.NewSolTicker(ctx)
 		sg.Add(solTicker)
 	}

@@ -197,6 +197,16 @@ func (s *BlockService) ProcessBlock(ctx context.Context, slot int64) {
 	}
 	block.Status = constants.BlockProcessed
 
+	s.processBlockInfo(ctx, block, blockInfo, slot, beginTime, true)
+}
+
+// processBlockInfo runs the per-transaction pipeline (decode → pair/token/
+// trade persistence → Kafka) over blockInfo. persistBlock controls whether
+// the block row itself is written: the slot scanner writes it, the program
+// watcher (single transactions fetched by signature) must not, or the
+// absent-slot backfill would think the whole slot was handled.
+func (s *BlockService) processBlockInfo(ctx context.Context, block *solmodel.Block, blockInfo *client.Block, slot int64, beginTime time.Time, persistBlock bool) {
+	var err error
 	//获取sol 价格
 	var tokenAccountMap = make(map[string]*TokenAccount)
 	solPrice := s.GetBlockSolPrice(ctx, blockInfo, tokenAccountMap)
@@ -398,6 +408,9 @@ func (s *BlockService) ProcessBlock(ctx context.Context, slot int64) {
 
 	group.Wait()
 
+	if !persistBlock {
+		return
+	}
 	err = s.sc.BlockModel.Insert(ctx, block)
 	if err != nil {
 		s.Errorf("processBlock:%v blockModel update err:", slot, err, block)
