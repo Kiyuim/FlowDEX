@@ -80,7 +80,7 @@ func NewTxManager(db *gorm.DB, rpcEndpoint, jitoEndPoint, uuid string, simulateO
 	tm := &TxManager{
 		DB:           db,
 		FeeReceiver:  aSDK.MustPublicKeyFromBase58(sol.FeeReceiver),
-		Client:       ag_rpc.New(rpcEndpoint),
+		Client:       NewRetryingRPCClient(rpcEndpoint),
 		JitoClient:   jitoClient,
 		JitoUUID:     uuid,
 		SimulateOnly: simulateOnly,
