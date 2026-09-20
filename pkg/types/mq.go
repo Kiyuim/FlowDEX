@@ -96,6 +96,7 @@ type TradeWithPair struct {
 	BaseTokenPriceUSD            float64           `json:"base_token_price_usd"`              // Price of the base token in USD
 	TotalUSD                     float64           `json:"total_usd"`                         // Total value in USD
 	TokenPriceUSD                float64           `json:"token_price_usd"`                   // Price of the non-base token in USD
+	SpotPriceUSD                 float64           `json:"spot_price_usd,omitempty"`          // Pool spot price after this trade (virtual reserves); candles use it
 	To                           string            `json:"to"`                                // Token recipient address
 	BlockNum                     int64             `json:"block_num"`                         // Block height
 	BlockTime                    int64             `json:"block_time"`                        // Block time

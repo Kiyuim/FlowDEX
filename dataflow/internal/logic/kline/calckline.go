@@ -89,6 +89,16 @@ func aggregateTradesIntoKlines(trades []*model.TradeWithPair, intervalMinute int
 	return result
 }
 
+
+// klinePrice is the price a trade contributes to OHLC: the pool spot price
+// after the trade when the consumer supplied it, else the execution price.
+func klinePrice(t *model.TradeWithPair) float64 {
+	if t.SpotPriceUSD > 0 {
+		return t.SpotPriceUSD
+	}
+	return t.TokenPriceUSD
+}
+
 // updateKlineByTrade updates an existing kline with new trade data
 func updateKlineByTrade(kline *datakline.Kline, trade *model.TradeWithPair) {
 	if trade == nil || kline == nil {
@@ -100,20 +110,20 @@ func updateKlineByTrade(kline *datakline.Kline, trade *model.TradeWithPair) {
 		// 纠正历史k线的开盘价、收盘价和市值相关
 		if trade.BlockTime < kline.OpenAt {
 			kline.OpenAt = trade.BlockTime
-			kline.Open = trade.TokenPriceUSD
+			kline.Open = klinePrice(trade)
 			kline.McapOpen = trade.Mcap
 		}
 		if trade.BlockTime > kline.CloseAt {
 			kline.CloseAt = trade.BlockTime
-			kline.Close = trade.TokenPriceUSD
+			kline.Close = klinePrice(trade)
 			kline.McapClose = trade.Mcap
 			kline.PumpPoint = trade.PumpPoint
 			kline.MktCap = trade.Mcap
 		}
 
 		// 计算当前k线的价格和市值相关
-		kline.High = max(kline.High, trade.TokenPriceUSD)
-		kline.Low = min(kline.Low, trade.TokenPriceUSD)
+		kline.High = max(kline.High, klinePrice(trade))
+		kline.Low = min(kline.Low, klinePrice(trade))
 		kline.McapHigh = max(kline.McapHigh, trade.Mcap)
 		kline.McapLow = min(kline.McapLow, trade.Mcap)
 
@@ -206,10 +216,10 @@ func newKlineByTrade(trade *model.TradeWithPair, candleTime int64, intervalMinut
 		CandleTime:  candleTime,
 		OpenAt:      openAt,
 		CloseAt:     closeAt,
-		Open:        trade.TokenPriceUSD,
-		Close:       trade.TokenPriceUSD,
-		High:        trade.TokenPriceUSD,
-		Low:         trade.TokenPriceUSD,
+		Open:        klinePrice(trade),
+		Close:       klinePrice(trade),
+		High:        klinePrice(trade),
+		Low:         klinePrice(trade),
 		McapOpen:    mcap,
 		McapClose:   mcap,
 		McapHigh:    mcap,

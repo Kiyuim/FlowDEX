@@ -64,6 +64,7 @@ type TradeWithPair struct {
 	BaseTokenPriceUSD float64 `json:"base_token_price_usd"` // Base token price
 	TotalUSD          float64 `json:"total_usd"`            // Total value
 	TokenPriceUSD     float64 `json:"token_price_usd"`      // Non-base token price
+	SpotPriceUSD      float64 `json:"spot_price_usd"`       // Pool spot price after the trade; candles prefer it
 	To                string  `json:"to"`                   // Token recipient address
 	BlockNum          int64   `json:"block_num"`            // Block height
 	BlockTime         int64   `json:"block_time"`           // Block timestamp

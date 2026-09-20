@@ -27,6 +27,13 @@ func (s *BlockService) SendTx(_ context.Context, slot int64, trades []*types.Tra
 			return false
 		}
 		item.CreateTime = now
+		// Candles chart the pool's spot price after the trade, not the trade's
+		// average execution price: on a bonding curve a sell right after a buy
+		// executes from the higher spot downward, so its average sits above the
+		// buy's average and the sell candle came out green.
+		if item.PumpVirtualBaseTokenReserves > 0 && item.PumpVirtualTokenReserves > 0 && item.BaseTokenPriceUSD > 0 {
+			item.SpotPriceUSD = item.PumpVirtualBaseTokenReserves / item.PumpVirtualTokenReserves * item.BaseTokenPriceUSD
+		}
 		return true
 	})
 
