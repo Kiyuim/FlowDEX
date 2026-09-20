@@ -31,7 +31,7 @@ const MyPools = ({ onPoolSelect }) => {
     setLoading(true);
     try {
       // Use API_BASE_URL to work with proxy in both dev and production
-      const response = await fetch(`${API_BASE_URL}/v1/market/user_pools?wallet_address=${publicKey.toString()}`);
+      const response = await fetch(`${API_BASE_URL}/v1/market/user_pools?chain_id=100000&wallet_address=${publicKey.toString()}`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch pools: ${response.status}`);
