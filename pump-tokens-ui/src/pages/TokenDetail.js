@@ -119,10 +119,18 @@ export default function TokenDetail() {
     || (token?.pairAddress && token.pairAddress !== mint ? token.pairAddress : null);
   const { trades: indexedTrades, stats: indexedStats, status: indexedStatus, reload: reloadIndexed } = useIndexedTrades(indexedPair);
   const useIndex = indexedStatus === 'ok';
+  const indexedUntilTs = useMemo(() => indexedTrades.reduce((m, t) => Math.max(m, Number(t.time) || 0), 0), [indexedTrades]);
   // Newest trade time the index has recorded — on-chain events newer than
   // this are applied to the chart as provisional ticks until indexed.
-  const indexedUntil = useMemo(() => indexedTrades.reduce((m, t) => Math.max(m, Number(t.time) || 0), 0), [indexedTrades]);
-  const trades = useIndex ? indexedTrades : chainTrades;
+  const indexedUntil = indexedUntilTs;
+  // Index rows are authoritative; on-chain events newer than the index's
+  // latest recorded trade are shown on top as live rows until indexed.
+  const liveNewer = useMemo(() => {
+    if (!useIndex) return [];
+    const seen = new Set(indexedTrades.map((t) => t.sig));
+    return chainTrades.filter((t) => Number(t.time) > indexedUntilTs && !seen.has(t.sig));
+  }, [useIndex, chainTrades, indexedTrades, indexedUntilTs]);
+  const trades = useMemo(() => (useIndex ? [...liveNewer, ...indexedTrades] : chainTrades), [useIndex, liveNewer, indexedTrades, chainTrades]);
   const tradesStatus = useIndex ? 'ok' : (indexedStatus === 'loading' && chainTradesStatus !== 'ok' ? 'loading' : chainTradesStatus);
 
   // Event-driven refresh: a WebSocket candle push means a trade was just
@@ -173,7 +181,8 @@ export default function TokenDetail() {
   };
   const priceStr = (p) => (p == null ? '—' : p < 0.001 ? `$${p.toExponential(2)}` : `$${p.toFixed(6)}`);
   // Real-time price, volume, change, and market cap updated from on-chain trades, candle stream, or curve
-  const displayPrice = stats?.price ?? candleStats?.price ?? (curveState?.mint === mint ? curveState.priceUsd : null) ?? finiteNumber(token?.price) ?? null;
+  const livePrice = liveNewer.length ? Number(liveNewer[0].priceUsd) || null : null;
+  const displayPrice = livePrice ?? stats?.price ?? candleStats?.price ?? (curveState?.mint === mint ? curveState.priceUsd : null) ?? finiteNumber(token?.price) ?? null;
   const displayVolume = stats?.vol24h ?? candleStats?.volume ?? finiteNumber(token?.vol24h);
   // Once a live quote exists, never pair it with the old indexed percentage.
   // That combination was the visible "$3.16e-6 / +12%" mismatch. If the
