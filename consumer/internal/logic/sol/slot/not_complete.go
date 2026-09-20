@@ -38,11 +38,9 @@ func (s *SlotService) SlotNotCompleted() {
 			return
 		case <-ticker.C:
 		}
-		// Backfill must never delay live blocks: only re-queue when the live
-		// queue is nearly drained, and a few at a time.
-		if len(s.realtimeCh) > 5 {
-			continue
-		}
+		// Backfill runs on a small fixed budget per tick (below) rather than
+		// waiting for an idle live queue — with live lag of tens of slots the
+		// queue is never idle, and gating on it meant nothing was ever recovered.
 		var since int64
 		if s.maxSlot > window {
 			since = int64(s.maxSlot) - window
@@ -62,7 +60,7 @@ func (s *SlotService) SlotNotCompleted() {
 					present[sl] = struct{}{}
 				}
 				queued := 0
-				for sl := scanFrom; sl < int64(s.maxSlot)-50 && queued < 40; sl++ {
+				for sl := scanFrom; sl < int64(s.maxSlot)-50 && queued < 15; sl++ {
 					if _, ok := present[sl]; ok {
 						continue
 					}
@@ -81,7 +79,7 @@ func (s *SlotService) SlotNotCompleted() {
 			}
 		}
 
-		slots, err := s.sc.BlockModel.FindProcessingSlots(s.ctx, since, 10)
+		slots, err := s.sc.BlockModel.FindProcessingSlots(s.ctx, since, 5)
 		if err != nil && !errors.Is(err, solmodel.ErrNotFound) {
 			s.Error("FindProcessingSlots err:", err)
 			continue
