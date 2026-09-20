@@ -22,48 +22,37 @@ func (s *SlotNotCompleteService) Start() {
 }
 
 func (s *SlotService) SlotNotCompleted() {
-	slot := s.sc.Config.Sol.StartBlock
-
-	if slot == 0 {
-		block, err := s.sc.BlockModel.FindFirstFailBlock(s.ctx)
-		if err != nil {
-			s.Errorf("SlotNotCompleted:FindFirstFailBlock %v", err)
-			slot = 0
-		} else {
-			slot = uint64(block.Slot)
-		}
-	}
-
-	s.Infof("SlotNotCompleted: start slot: %v, startBlock: %v", slot, s.sc.Config.Sol.StartBlock)
-
-	var checkTicker = time.NewTicker(time.Millisecond * 5000)
-	var sendTicker = time.NewTicker(time.Millisecond * 1000)
-	defer checkTicker.Stop()
-	defer sendTicker.Stop()
+	// Re-queue blocks whose fetch failed (BlockFailed) onto the same worker
+	// queue as live slots. This used to run once at startup, exit as soon as
+	// it found nothing, and push to a channel no worker consumed — so a block
+	// dropped by a transient RPC error (429, "not available") was lost for
+	// good, along with any token create or trade inside it.
+	const window = 20000 // slots (~1-2h on devnet); older losses aren't worth the RPC
+	s.Infof("SlotNotCompleted: retry loop started")
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-s.ctx.Done():
 			s.Info("slotFailed stop succeed")
 			return
-		case <-checkTicker.C:
-			slots, err := s.sc.BlockModel.FindProcessingSlots(s.ctx, int64(slot-100), 50)
-			s.Infof("FindProcessingSlots err: %v, size: %v", err, len(slots))
-			switch {
-			case errors.Is(err, solmodel.ErrNotFound) || len(slots) == 0:
+		case <-ticker.C:
+		}
+		var since int64
+		if s.maxSlot > window {
+			since = int64(s.maxSlot) - window
+		}
+		slots, err := s.sc.BlockModel.FindProcessingSlots(s.ctx, since, 50)
+		if err != nil && !errors.Is(err, solmodel.ErrNotFound) {
+			s.Error("FindProcessingSlots err:", err)
+			continue
+		}
+		for _, b := range slots {
+			select {
+			case <-s.ctx.Done():
 				return
-			case err == nil:
-			default:
-				s.Error("FindProcessingSlot err:", err)
-			}
-			for _, slot := range slots {
-				select {
-				case <-s.ctx.Done():
-					return
-				case <-sendTicker.C:
-					s.Infof("SlotNotCompleted: push slot: %v to err chain, start Block: %v", slot.Slot, s.sc.Config.Sol.StartBlock)
-
-					s.errorCh <- uint64(slot.Slot)
-				}
+			case s.realtimeCh <- uint64(b.Slot):
+				s.Infof("SlotNotCompleted: re-queued failed slot %v", b.Slot)
 			}
 		}
 	}

@@ -50,7 +50,9 @@ func GetSolBlockInfo(c *client.Client, ctx context.Context, slot uint64) (resp *
 				return
 			}
 			time.Sleep(time.Second)
-		case strings.Contains(err.Error(), "limit"):
+		case strings.Contains(err.Error(), "limit"),
+			strings.Contains(err.Error(), "429"),
+			strings.Contains(strings.ToLower(err.Error()), "too many requests"):
 			count++
 			if count > 10 {
 				return

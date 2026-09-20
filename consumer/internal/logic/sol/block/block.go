@@ -165,7 +165,17 @@ func (s *BlockService) ProcessBlock(ctx context.Context, slot int64) {
 			_ = s.sc.BlockModel.Insert(ctx, block)
 			return
 		}
-		// 异常区块记录，后续做兜底策略，把丢的区块补回来
+		// Record the failure as BlockFailed so SlotNotCompleted re-queues it.
+		// It used to be saved with the zero status, which nothing ever looked
+		// for — 7.6% of blocks (any 429 from the RPC) were silently lost,
+		// including token creates and trades in them.
+		block.Status = constants.BlockFailed
+		if err != nil {
+			block.ErrMessage = err.Error()
+			if len(block.ErrMessage) > 250 {
+				block.ErrMessage = block.ErrMessage[:250]
+			}
+		}
 		_ = s.sc.BlockModel.Insert(ctx, block)
 		s.Errorf("processBlock:%v getSolBlockInfo error: %v", slot, err)
 		return
