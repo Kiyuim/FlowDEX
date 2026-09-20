@@ -1,7 +1,30 @@
-# This Vercel project builds only the React frontend.
-*
-!pump-tokens-ui/
-!pump-tokens-ui/**
+# Vercel project for React frontend (pump-tokens-ui)
+cmd/
+consumer/
+dataflow/
+gateway/
+internal/
+lessons/
+market/
+model/
+pkg/
+scripts/
+template/
+tools/
+trade/
+vendor-patches/
+websocket/
+docker/
+*.go
+go.mod
+go.sum
+Dockerfile*
+*.sh
+*.png
+*.md
+TODO.md
+
+# Frontend local ignores
 pump-tokens-ui/node_modules/
 pump-tokens-ui/build/
 pump-tokens-ui/.env*
