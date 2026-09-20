@@ -157,7 +157,7 @@ export default function TokenDetail() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
           <div className="rounded-xl border border-border bg-bg-card p-2 shadow-card">
-            <div className="h-[380px] md:h-[460px]">
+            <div className={token ? '' : 'h-[380px] md:h-[460px]'}>
               {token ? (
                 // TradingViewChart fetches candles from our own backend
                 // (/v1/market/get_candlestick), independent of on-chain trades —

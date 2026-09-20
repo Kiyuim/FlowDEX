@@ -15,11 +15,12 @@
   auth-whitelist gaps are fixed, but this has NOT yet been confirmed working
   live end-to-end (create a real token → buy it → watch the candle appear).
   This is the single most important thing to verify next.
-- **Add Liquidity 515 error**: selecting a real pool (e.g. SOL/SCAT) now
-  correctly populates the form (field-mapping bug fixed), but submitting
-  returns `Error 515: An error occurred in the backend service`. Not yet
-  root-caused — needs a look at `AddLiquidityV1`'s logic with a pool that
-  has a real on-chain account (the old seeded CLMM pools likely don't).
+- **Add Liquidity 515 error — root-caused**: confirmed the SOL/SCAT pool's
+  `poolState` address isn't a real Solana account either (same "WrongSize"
+  RPC response as the fake pump tokens) — it's seeded data, so
+  `AddLiquidityV1` fails trying to read live on-chain pool state that
+  doesn't exist. Not a bug; needs testing against a pool actually created
+  through the app.
 - **Pool creation "signature has invalid length"**: investigated deeply this
   round. Pulled the actual unsigned transaction bytes the backend returned
   for a real request and verified byte-by-byte that the compact-u16
@@ -44,6 +45,27 @@
   `/v1/market/user_tokens` (backed by `record_user_asset`, recorded at
   creation time with the real name) as a second metadata source. Not yet
   confirmed live.
+
+## Done this round, continued further (2026-09-20, even later)
+
+- **Chart overlay covering the stats below it**: `TokenDetail.js` wrapped the
+  chart in a fixed `h-[380px] md:h-[460px]` box, but `TradingViewChart`'s own
+  header row + 400px canvas + connection-status footer add up to more than
+  that — always overflowing, just invisible before because the chart never
+  used to render for tokens with no on-chain trades. Now that it always
+  mounts (an earlier fix this round), the overflow spilled onto Price/24h
+  Volume/Trades/Traders below it. Removed the fixed height when a token is
+  loaded (only the loading placeholder still needs it).
+- **Portfolio never showed tokens you created — root-caused properly this
+  time**: Portfolio.js only lists wallet token *balances*
+  (`getParsedTokenAccountsByOwner`), but creating a bonding-curve token
+  (PumpMeteora) mints the entire supply into the program's own vault, not
+  the creator's wallet — so a created token can never appear there, no
+  matter how much later trading happens or how good the name-lookup is.
+  Added a separate "Created by you" section backed directly by
+  `/v1/market/user_tokens` and `/v1/market/user_pools` (record_user_asset
+  data), independent of wallet balance. Verified live against a real
+  wallet's data — the rows were already there, just never surfaced.
 
 ## Done this round, continued (2026-09-20, later)
 
