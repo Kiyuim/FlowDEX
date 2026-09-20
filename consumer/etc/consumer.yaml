@@ -6,7 +6,12 @@ ListenOn: 0.0.0.0:8088
 #   Key: consumer.rpc
 
 Consumer:
-  Concurrency: 1
+  # A single worker fetching+decoding blocks sequentially can't keep up with
+  # devnet's ~2.5 blocks/sec — each getBlock+decode round-trip easily takes
+  # longer than that, so almost every block was being dropped (observed
+  # gaps of 800-1000+ slots between processed blocks in production). Run
+  # several workers in parallel pulling off the same slot channel.
+  Concurrency: 8
 
 # Mysql:
 #   User: root
