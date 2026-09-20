@@ -126,6 +126,12 @@ export function parseMeteoraSwapEventLog(log) {
   const tokenAmount = Number(isBuy ? amountOut : amountIn) / 10 ** TOKEN_DECIMALS;
   const realSolNum = Number(realSol) / 1e9;
   const realTokenNum = Number(realToken) / 10 ** TOKEN_DECIMALS;
-  const priceUsd = realTokenNum ? (realSolNum / realTokenNum) * SOL_USD : 0;
-  return { isBuy, maker, solAmount, tokenAmount, priceUsd };
+  // Price of a trade row is its execution price (SOL paid or received per
+  // token), the same definition the backend uses for TokenPriceUSD. The
+  // post-trade reserve ratio is exposed separately as spotPriceUsd — on a
+  // thinly traded curve a sell can drain the SOL side to dust, which made
+  // every sell row show ~1e-16 when that ratio was used as "price".
+  const spotPriceUsd = realTokenNum ? (realSolNum / realTokenNum) * SOL_USD : 0;
+  const priceUsd = tokenAmount > 0 ? (solAmount / tokenAmount) * SOL_USD : spotPriceUsd;
+  return { isBuy, maker, solAmount, tokenAmount, priceUsd, spotPriceUsd };
 }
