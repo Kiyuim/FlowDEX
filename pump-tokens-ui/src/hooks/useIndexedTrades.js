@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const POLL_MS = 5000;
+const POLL_MS = 3000;
 
 /**
  * A pair's recent trades and 24h stats from the backend index — the same

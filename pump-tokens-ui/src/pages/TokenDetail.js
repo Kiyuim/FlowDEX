@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import TradingViewChart from '../components/TradingViewChart';
@@ -108,7 +108,7 @@ export default function TokenDetail() {
   useEffect(() => {
     if (!mint) return undefined;
     reloadCurveState();
-    const id = setInterval(reloadCurveState, 15000);
+    const id = setInterval(reloadCurveState, 5000);
     return () => clearInterval(id);
   }, [mint, reloadCurveState]);
 
@@ -121,6 +121,20 @@ export default function TokenDetail() {
   const useIndex = indexedStatus === 'ok';
   const trades = useIndex ? indexedTrades : chainTrades;
   const tradesStatus = useIndex ? 'ok' : (indexedStatus === 'loading' && chainTradesStatus !== 'ok' ? 'loading' : chainTradesStatus);
+
+  // Event-driven refresh: a WebSocket candle push means a trade was just
+  // indexed for this pair, so pull price/stats/reserves/progress right then
+  // instead of waiting for the next timer tick.
+  const lastLiveRef = useRef(0);
+  useEffect(() => {
+    if (!candleStats) return;
+    const now = Date.now();
+    if (now - lastLiveRef.current < 1500) return;
+    lastLiveRef.current = now;
+    reloadIndexed();
+    reloadCurveState();
+    reloadReserves();
+  }, [candleStats, reloadIndexed, reloadCurveState, reloadReserves]);
 
   const handleTradeComplete = useCallback(() => {
     setChartRefresh((n) => n + 1);
