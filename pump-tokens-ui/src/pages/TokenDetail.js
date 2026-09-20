@@ -88,7 +88,6 @@ export default function TokenDetail() {
   const priceStr = (p) => (p == null ? '—' : p < 0.001 ? `$${p.toExponential(2)}` : `$${p.toFixed(6)}`);
   // Price to show: trade-derived when available, else the live bonding-curve price.
   const displayPrice = stats?.price ?? curveState?.priceUsd ?? null;
-  const hasTrades = trades.length > 0;
   // reserves hook is pump.fun-only; fall back to the source-aware curve read.
   const poolRes = reserves || curveState;
 
@@ -159,8 +158,12 @@ export default function TokenDetail() {
         <div className="min-w-0 space-y-4">
           <div className="rounded-xl border border-border bg-bg-card p-2 shadow-card">
             <div className="h-[380px] md:h-[460px]">
-              {hasTrades ? (
-                token && <TradingViewChart token={token} visible />
+              {token ? (
+                // TradingViewChart fetches candles from our own backend
+                // (/v1/market/get_candlestick), independent of on-chain trades —
+                // it renders fine even before (or without) any on-chain fill, and
+                // shows its own empty state if the backend has no candles either.
+                <TradingViewChart token={token} visible />
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
                   <div className="text-4xl">🌱</div>

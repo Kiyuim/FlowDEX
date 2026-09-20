@@ -116,13 +116,17 @@ func (l *GetPumpTokenListLogic) GetPumpTokenList(in *market.GetPumpTokenListRequ
 		list := make([]*market.PumpTokenItem, 0)
 		for _, pair := range pairList {
 			token := tokenMap[pair.TokenAddress]
-			var tokenIcon, twitterUsername, telegram, program string
+			var tokenIcon, twitterUsername, telegram string
 			if token != nil {
 				tokenIcon = token.Icon
 				twitterUsername = token.TwitterUsername
 				telegram = token.Telegram
-				program = token.Program
 			}
+			// pair.Name carries the trading source ("PumpFun"/"PumpMeteora"/
+			// "PumpMeteoraV2"), set by the consumer's per-program decoder. This is
+			// NOT token.Program, which is the SPL token program (Token/Token-2022)
+			// the mint itself uses — a different axis entirely.
+			program := pair.Name
 
 			item := &market.PumpTokenItem{
 				ChainId:          pair.ChainId,

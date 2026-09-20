@@ -7,6 +7,18 @@ const API_URL = process.env.NODE_ENV === 'development'
   ? '' // Use proxy in development
   : '/direct-api'; // Use Nginx proxy in production (via /direct-api)
 
+// Keeps a time-ordered candle array in sync with a single upsert, so the
+// click-info popup can look up the previous candle's close for % change.
+function upsertCandle(series, candle) {
+  const idx = series.findIndex((c) => c.time === candle.time);
+  if (idx >= 0) {
+    const next = series.slice();
+    next[idx] = candle;
+    return next;
+  }
+  return [...series, candle].sort((a, b) => a.time - b.time);
+}
+
 const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
   const chartContainerRef = useRef();
   const chartRef = useRef();
@@ -16,6 +28,8 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
   const [interval, setInterval] = useState('1h');
   const [wsConnection, setWsConnection] = useState(null);
   const mockIntervalRef = useRef(null);
+  const candleDataRef = useRef([]); // full series, kept in time order, for prev-close lookup
+  const [clickInfo, setClickInfo] = useState(null); // { x, y, candle, prevClose }
 
   // Initialize chart
   useEffect(() => {
@@ -68,6 +82,30 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
 
       chartRef.current = chart;
       candlestickSeriesRef.current = candlestickSeries;
+
+      // GMGN-style click-to-inspect: clicking a candle shows a floating card
+      // with its O/H/L/C, volume and % change at the click point.
+      chart.subscribeClick((param) => {
+        if (!param.point || !param.time || !candlestickSeriesRef.current) {
+          setClickInfo(null);
+          return;
+        }
+        const candle = param.seriesData?.get(candlestickSeriesRef.current);
+        if (!candle) {
+          setClickInfo(null);
+          return;
+        }
+        const series = candleDataRef.current;
+        const idx = series.findIndex((c) => c.time === param.time);
+        const prevClose = idx > 0 ? series[idx - 1].close : null;
+        setClickInfo({
+          x: param.point.x,
+          y: param.point.y,
+          time: param.time,
+          candle,
+          prevClose,
+        });
+      });
 
       // Handle resize
       const handleResize = () => {
@@ -161,6 +199,7 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         
         try {
           candlestickSeriesRef.current.update(chartData);
+          candleDataRef.current = upsertCandle(candleDataRef.current, chartData);
           lastPrice = chartData.close; // Update base price for next iteration
         } catch (error) {
           console.warn('Mock data update error:', error);
@@ -187,6 +226,7 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         
         try {
           candlestickSeriesRef.current.update(chartData);
+          candleDataRef.current = upsertCandle(candleDataRef.current, chartData);
           lastPrice = chartData.close;
         } catch (error) {
           console.warn('Mock data update error:', error);
@@ -309,6 +349,7 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
               // Update the chart with new data, but handle timestamp ordering
               try {
                 candlestickSeriesRef.current.update(chartData);
+                candleDataRef.current = upsertCandle(candleDataRef.current, chartData);
                 console.log('Chart updated successfully with timestamp:', chartData.time);
               } catch (updateError) {
                 console.error('Error updating chart:', updateError);
@@ -399,15 +440,23 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
 
     try {
       const now = Math.floor(Date.now() / 1000);
-      const oneDayAgo = now - (24 * 60 * 60); // 24 hours ago
+      // Scale the lookback window with the candle size so e.g. 1d candles show
+      // real history instead of always fetching just the last 24h (which for
+      // a 1d interval is at most a single candle).
+      const intervalSeconds = {
+        '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400,
+      }[selectedInterval] || 3600;
+      const limit = 200;
+      const lookback = intervalSeconds * limit;
+      const fromTimestamp = now - lookback;
 
       const params = new URLSearchParams({
         chain_id: 100000,
         pair_address: token.pairAddress,
         interval: selectedInterval,
-        from_timestamp: oneDayAgo,
+        from_timestamp: fromTimestamp,
         to_timestamp: now,
-        limit: 100,
+        limit,
       });
 
       const response = await fetch(`${API_URL}/v1/market/get_candlestick?${params}`, {
@@ -455,6 +504,7 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
 
       if (chartData.length > 0) {
         candlestickSeriesRef.current.setData(chartData);
+        candleDataRef.current = chartData.slice();
         
         // Add real-time connection status indicator
         const lastDataPoint = chartData[chartData.length - 1];
@@ -475,6 +525,7 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
 
   // Load data when token or interval changes
   useEffect(() => {
+    setClickInfo(null);
     if (token?.pairAddress && visible) {
       fetchKlineData(interval);
     }
@@ -535,6 +586,7 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
                   };
                   if (candlestickSeriesRef.current) {
                     candlestickSeriesRef.current.update(chartData);
+                    candleDataRef.current = upsertCandle(candleDataRef.current, chartData);
                   }
                 }}
               >
@@ -571,16 +623,69 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         </div>
       )}
 
-      <div 
-        ref={chartContainerRef} 
-        className="chart-container"
-        style={{ 
-          position: 'relative',
-          width: '100%',
-          height: '400px',
-          opacity: isLoading ? 0.6 : 1,
-        }}
-      />
+      <div style={{ position: 'relative' }}>
+        <div
+          ref={chartContainerRef}
+          className="chart-container"
+          style={{
+            position: 'relative',
+            width: '100%',
+            height: '400px',
+            opacity: isLoading ? 0.6 : 1,
+          }}
+        />
+
+        {clickInfo && (() => {
+          const { candle, prevClose } = clickInfo;
+          const changePct = prevClose ? ((candle.close - prevClose) / prevClose) * 100 : null;
+          const up = candle.close >= candle.open;
+          // Keep the card inside the chart bounds near the click point.
+          const left = Math.min(Math.max(clickInfo.x - 90, 4), (chartContainerRef.current?.clientWidth || 400) - 184);
+          const top = Math.min(Math.max(clickInfo.y + 12, 4), 400 - 140);
+          return (
+            <div
+              className="candle-info-popup"
+              style={{
+                position: 'absolute',
+                left,
+                top,
+                width: 180,
+                zIndex: 5,
+                background: 'rgba(20,20,20,0.95)',
+                border: '1px solid #3a3a3a',
+                borderRadius: 8,
+                padding: '8px 10px',
+                fontSize: 12,
+                color: '#d1d4dc',
+                pointerEvents: 'none',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              }}
+            >
+              <div style={{ marginBottom: 4, color: '#9aa', fontSize: 11 }}>
+                {new Date(clickInfo.time * 1000).toLocaleString()}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>O</span><span>{candle.open}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>H</span><span>{candle.high}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>L</span><span>{candle.low}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>C</span><span>{candle.close}</span>
+              </div>
+              {changePct != null && (
+                <div style={{ marginTop: 4, fontWeight: 600, color: up ? '#00d4aa' : '#ff6838' }}>
+                  {changePct >= 0 ? '+' : ''}
+                  {changePct.toFixed(2)}%
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </div>
 
       {/* Real-time connection status */}
       <div className="connection-status">
