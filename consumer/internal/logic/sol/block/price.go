@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"dex/pkg/solprice"
+
 	"github.com/blocto/solana-go-sdk/client"
 	"github.com/blocto/solana-go-sdk/common"
 	"github.com/blocto/solana-go-sdk/program/token"
@@ -107,11 +109,18 @@ func (s *BlockService) GetBlockSolPrice(ctx context.Context, block *client.Block
 		return s.solPrice
 	}
 	b, err := s.sc.BlockModel.FindOneByNearSlot(s.ctx, int64(block.ParentSlot))
-	if err != nil || b == nil {
-		// todo: init price
-		return 0
+	if err == nil && b != nil && b.SolPrice > 0 {
+		return b.SolPrice
 	}
-	return b.SolPrice
+	// devnet has no real stablecoin pool to derive a price from, so every
+	// source above is always 0 here — and TokenPriceUSD computed from a
+	// zero SOL price is always 0 too, which SaveTrades silently filters
+	// out before a single real trade is ever saved. Fall back to the same
+	// CoinGecko-backed price the market service already uses for display.
+	if p := solprice.GetSolUsdPrice(); p > 0 {
+		return p
+	}
+	return 0
 }
 
 func in[T comparable](list []T, a T) bool {

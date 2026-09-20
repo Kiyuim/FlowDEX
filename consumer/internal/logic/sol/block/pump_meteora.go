@@ -108,7 +108,6 @@ func meteoraTokenDecimal(dtx *DecodedTx, accountKeys []common.PublicKey, instruc
 
 // DecodePumpMeteoraInstruction routes a pump-meteora instruction to the swap/create decoder.
 func DecodePumpMeteoraInstruction(ctx context.Context, sc *svc.ServiceContext, dtx *DecodedTx, instruction *solTypes.CompiledInstruction, logIndex int) (trade *types.TradeWithPair, err error) {
-	fmt.Println("PROBE_METEORA_HIT tx=", dtx.TxHash, "disc=", GetPumpInstruction(instruction.Data))
 	switch GetPumpInstruction(instruction.Data) {
 	case MeteoraInstructionSwap:
 		return decodeMeteoraSwap(dtx, instruction, logIndex)
