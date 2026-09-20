@@ -65,6 +65,7 @@ message CreatePoolRequest {
 
 message CreatePoolResponse {
   string tx_hash = 1;
+  string pool_address = 2; // Derived pool state PDA, for Portfolio attribution once the tx confirms
 }
 
 message QueryCurrentOrdersRequest {

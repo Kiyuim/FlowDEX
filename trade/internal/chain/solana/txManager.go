@@ -718,14 +718,15 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 	return base64.StdEncoding.EncodeToString(txData), nil
 }
 
-// BuildUnsignedPoolTransaction builds an unsigned pool creation transaction for third-party wallet signing
-func (tm *TxManager) BuildUnsignedPoolTransaction(ctx context.Context, createPoolTx *trade.CreatePoolTx) (string, error) {
+// BuildUnsignedPoolTransaction builds an unsigned pool creation transaction for third-party wallet signing.
+// Returns (unsignedTxBase64, poolStateAddress, error).
+func (tm *TxManager) BuildUnsignedPoolTransaction(ctx context.Context, createPoolTx *trade.CreatePoolTx) (string, string, error) {
 	logx.WithContext(ctx).Infof("🏊 Building unsigned pool creation transaction for third-party wallet signing")
 
 	// Get instructions for pool creation
-	instructions, err := tm.CreatePoolInstructions(ctx, createPoolTx)
+	instructions, poolAddress, err := tm.CreatePoolInstructions(ctx, createPoolTx)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// Get latest blockhash with timeout
@@ -734,18 +735,18 @@ func (tm *TxManager) BuildUnsignedPoolTransaction(ctx context.Context, createPoo
 
 	resp, err := tm.Client.GetLatestBlockhash(timeoutCtx, ag_rpc.CommitmentFinalized)
 	if err != nil {
-		return "", fmt.Errorf("failed to get latest blockhash: %w", err)
+		return "", "", fmt.Errorf("failed to get latest blockhash: %w", err)
 	}
 
 	// Create unsigned transaction
 	feePayer, err := aSDK.PublicKeyFromBase58(createPoolTx.UserWalletAddress)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	tx, err := aSDK.NewTransaction(instructions, resp.Value.Blockhash, aSDK.TransactionPayer(feePayer))
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// Initialize empty signatures for the transaction
@@ -756,12 +757,12 @@ func (tm *TxManager) BuildUnsignedPoolTransaction(ctx context.Context, createPoo
 	txData, err := tx.MarshalBinary()
 	if err != nil {
 		logx.WithContext(ctx).Errorf("Failed to serialize pool creation transaction: %v", err)
-		return "", err
+		return "", "", err
 	}
 
 	logx.WithContext(ctx).Infof("✅ Pool creation transaction serialized successfully, size: %d bytes", len(txData))
 	// Return the serialized transaction as base64
-	return base64.StdEncoding.EncodeToString(txData), nil
+	return base64.StdEncoding.EncodeToString(txData), poolAddress, nil
 }
 
 // BuildUnsignedAddLiquidityTransaction builds an unsigned transaction for adding liquidity to a pool
@@ -1958,23 +1959,23 @@ func (tm *TxManager) buildOpenPositionInstruction(
 	return openPositionInst
 }
 
-func (tm *TxManager) CreatePoolInstructions(ctx context.Context, createPoolTx *trade.CreatePoolTx) ([]aSDK.Instruction, error) {
+func (tm *TxManager) CreatePoolInstructions(ctx context.Context, createPoolTx *trade.CreatePoolTx) ([]aSDK.Instruction, string, error) {
 	logx.WithContext(ctx).Infof("🔧 Creating Raydium CLMM pool instructions for tokens: %s, %s", createPoolTx.TokenMint0, createPoolTx.TokenMint1)
 
 	// 1. Convert string addresses to PublicKeys
 	tokenMint0, err := aSDK.PublicKeyFromBase58(createPoolTx.TokenMint0)
 	if err != nil {
-		return nil, fmt.Errorf("invalid token_mint_0: %v", err)
+		return nil, "", fmt.Errorf("invalid token_mint_0: %v", err)
 	}
 
 	tokenMint1, err := aSDK.PublicKeyFromBase58(createPoolTx.TokenMint1)
 	if err != nil {
-		return nil, fmt.Errorf("invalid token_mint_1: %v", err)
+		return nil, "", fmt.Errorf("invalid token_mint_1: %v", err)
 	}
 
 	poolCreator, err := aSDK.PublicKeyFromBase58(createPoolTx.UserWalletAddress)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user wallet address: %v", err)
+		return nil, "", fmt.Errorf("invalid user wallet address: %v", err)
 	}
 
 	// 2. Add compute budget instructions (always required for complex transactions)
@@ -2009,7 +2010,7 @@ func (tm *TxManager) CreatePoolInstructions(ctx context.Context, createPoolTx *t
 	// Price is provided as decimal, e.g. 0.001
 	initialPrice, err := decimal.NewFromString(createPoolTx.InitialPrice)
 	if err != nil {
-		return nil, fmt.Errorf("invalid initial price: %v", err)
+		return nil, "", fmt.Errorf("invalid initial price: %v", err)
 	}
 
 	// Convert price to sqrtPriceX64
@@ -2048,7 +2049,7 @@ func (tm *TxManager) CreatePoolInstructions(ctx context.Context, createPoolTx *t
 		ammConfig,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to derive PDAs: %v", err)
+		return nil, "", fmt.Errorf("failed to derive PDAs: %v", err)
 	}
 
 	logx.WithContext(ctx).Infof("Pool State PDA: %s", poolStatePDA)
@@ -2130,12 +2131,15 @@ func (tm *TxManager) CreatePoolInstructions(ctx context.Context, createPoolTx *t
 	logx.WithContext(ctx).Infof("  - Open Time: %d (%s)", createPoolTx.OpenTime,
 		time.Unix(createPoolTx.OpenTime, 0).Format(time.RFC3339))
 
-	// Return all instructions
+	// Return all instructions plus the derived pool state address, so the
+	// caller can hand it back to the frontend for Portfolio attribution —
+	// CreatePoolResponse used to only carry the unsigned tx, with no way to
+	// know which pool a successful creation actually produced.
 	return []aSDK.Instruction{
 		computeUnitPriceInstruction,
 		computeUnitLimitInstruction,
 		poolInstruction,
-	}, nil
+	}, poolStatePDA.String(), nil
 }
 
 // findRaydiumPoolPDAs finds the correct PDAs for Raydium CLMM pools

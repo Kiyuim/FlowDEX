@@ -23,15 +23,14 @@
   margin: 0 auto;
   padding: 10px 20px;
   border-bottom: 1px solid #2a2a2a;
-  flex-wrap: wrap;
 }
 
 .app-header-left {
   display: flex;
   align-items: center;
   gap: 24px;
-  flex-wrap: wrap;
   min-width: 0;
+  flex: 1;
 }
 
 .app-brand {
@@ -42,6 +41,7 @@
   font-weight: bold;
   color: #00ff88;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .devnet-badge {
@@ -59,7 +59,22 @@
 .tab-navigation {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab-navigation::-webkit-scrollbar {
+  display: none;
+}
+
+.app-header-left > .tab-navigation {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.tab-navigation .tab-btn {
+  flex-shrink: 0;
 }
 
 .tab-btn {

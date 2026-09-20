@@ -61,14 +61,14 @@ func (l *CreatePoolLogic) CreatePool(in *trade.CreatePoolRequest) (*trade.Create
 	}
 
 	// Build unsigned transaction for third-party wallet signing
-	unsignedTxBase64, err := l.svcCtx.SolTxMananger.BuildUnsignedPoolTransaction(l.ctx, createPoolTx)
+	unsignedTxBase64, poolAddress, err := l.svcCtx.SolTxMananger.BuildUnsignedPoolTransaction(l.ctx, createPoolTx)
 	if err != nil {
 		l.Errorf("❌ SolTxMananger.BuildUnsignedPoolTransaction err: %v", err)
 		return nil, err
 	}
 
-	l.Infof("✅ BuildUnsignedPoolTransaction success, length=%d", len(unsignedTxBase64))
-	return &trade.CreatePoolResponse{TxHash: unsignedTxBase64}, nil
+	l.Infof("✅ BuildUnsignedPoolTransaction success, length=%d, poolAddress=%s", len(unsignedTxBase64), poolAddress)
+	return &trade.CreatePoolResponse{TxHash: unsignedTxBase64, PoolAddress: poolAddress}, nil
 }
 
 func (l *CreatePoolLogic) validateCreatePoolParams(in *trade.CreatePoolRequest) error {
