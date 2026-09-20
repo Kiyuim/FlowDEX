@@ -67,6 +67,15 @@ Upstreams: # upstreams
         Path: /v1/trade/create_limit_order
         RpcPath: trade.Trade/CreateLimitOrder
       - Method: post
+        Path: /v1/trade/create_trailing_stop
+        RpcPath: trade.Trade/CreateTrailingStop
+      - Method: post
+        Path: /v1/trade/cancel_order
+        RpcPath: trade.Trade/CancelOrder
+      - Method: post
+        Path: /v1/trade/query_current_orders
+        RpcPath: trade.Trade/QueryCurrentOrders
+      - Method: post
         Path: /v1/trade/create_pool
         RpcPath: trade.Trade/CreatePool
       - Method: post

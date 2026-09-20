@@ -253,7 +253,7 @@ export default function TokenDetail() {
             <div className="rounded-xl border border-border bg-bg-card p-4">
               <div className="mb-1.5 flex justify-between text-xs text-muted">
                 <span>Bonding curve progress</span>
-                <span>{fmt(Number(token.domesticProgress) * 100, 1)}%</span>
+                <span>{fmt(Math.min(100, Number(token.domesticProgress) * 100), 1)}%</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-bg-soft">
                 <div

@@ -23,7 +23,7 @@ import './TokenCreation.css';
 const MINT_SIZE = 82; // Size of a mint account in bytes
 
 const TokenCreation = () => {
-  const { publicKey, connected, signTransaction, sendTransaction } = useWallet();
+  const { publicKey, connected, sendTransaction } = useWallet();
   const { connection } = useConnection();
   
   // Form state
@@ -102,9 +102,12 @@ const TokenCreation = () => {
         const { blockhash } = await connection.getLatestBlockhash();
         tx.recentBlockhash = blockhash;
         tx.feePayer = publicKey;
-        tx.partialSign(curveMint);
-        const signed = await signTransaction(tx);
-        const txid = await connection.sendRawTransaction(signed.serialize());
+        // sendTransaction (not manual signTransaction + sendRawTransaction) lets
+        // the wallet extension use its own atomic signAndSendTransaction — the
+        // manual round-trip (sign here, re-serialize, send raw) is what produced
+        // "signature has invalid length" for some wallets. `signers` partial-signs
+        // with the fresh mint keypair before handing off to the wallet.
+        const txid = await sendTransaction(tx, connection, { signers: [curveMint] });
         await connection.confirmTransaction(txid, 'confirmed');
         setSuccess(`${METEORA_LABELS[formData.launchTarget]} token created — it's now a live bonding curve. Trade it from the Sources page.`);
         setTxSignature(txid);
@@ -222,21 +225,13 @@ const TokenCreation = () => {
 
       // Sign and send transaction
       try {
-        console.log('🖊️ Requesting wallet signature...');
-        
-        // Sign with mint keypair first
-        transaction.partialSign(mintKeypair);
-        console.log('✅ Partially signed with mint keypair');
-        
-        // Get wallet signature
-        const signedTransaction = await signTransaction(transaction);
-        console.log('✅ Transaction signed by wallet');
-        console.log('Transaction signatures:', signedTransaction.signatures.map(s => s.publicKey.toString()));
-        console.log('Transaction blockhash:', transaction.recentBlockhash);
-        
-        // Send with sendRawTransaction
+        // sendTransaction (not manual signTransaction + sendRawTransaction) lets
+        // the wallet extension use its own atomic signAndSendTransaction — the
+        // manual round-trip (sign here, re-serialize, send raw) is what produced
+        // "signature has invalid length" for some wallets. `signers` partial-signs
+        // with the fresh mint keypair before handing off to the wallet.
         console.log('📡 Sending transaction...');
-        const txid = await connection.sendRawTransaction(signedTransaction.serialize());
+        const txid = await sendTransaction(transaction, connection, { signers: [mintKeypair] });
         await connection.confirmTransaction(txid, 'confirmed');
         console.log('✅ Transaction confirmed!');
 

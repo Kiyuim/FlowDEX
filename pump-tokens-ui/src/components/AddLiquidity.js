@@ -19,7 +19,7 @@ function toSmallestUnit(amount) {
 }
 
 const AddLiquidity = () => {
-  const { publicKey, connected, signTransaction } = useWallet();
+  const { publicKey, connected, sendTransaction } = useWallet();
   const { connection } = useConnection();
   
   const [isLoading, setIsLoading] = useState(false);
@@ -33,7 +33,7 @@ const AddLiquidity = () => {
       return;
     }
 
-    if (!signTransaction) {
+    if (!sendTransaction) {
       setError('Wallet does not support transaction signing');
       return;
     }
@@ -184,33 +184,15 @@ const AddLiquidity = () => {
         return;
       }
 
-      // Step 3: Sign transaction
-      setSuccess('Signing transaction...');
-      let signedTransaction;
-      try {
-        signedTransaction = await signTransaction(transaction);
-        console.log('Transaction signed successfully');
-        // 签名后打印签名内容
-        if (signedTransaction.signatures) {
-          console.log('📝 After signing, signatures:', signedTransaction.signatures.map(sig => Buffer.from(sig).toString('hex')));
-        }
-      } catch (signError) {
-        console.error('Failed to sign transaction:', signError);
-        setError(`Failed to sign transaction: ${signError.message}`);
-        return;
-      }
-
-      // Step 4: Send transaction
+      // Step 3: Sign and send. sendTransaction (not a manual signTransaction +
+      // sendRawTransaction round-trip) lets the wallet extension use its own
+      // atomic signAndSendTransaction — the manual round-trip is what produced
+      // "signature has invalid length" for some wallets.
       setSuccess('Sending transaction...');
       try {
-        // Serialize the signed transaction
-        const serializedTransaction = signedTransaction.serialize();
-        // 新增日志：打印序列化长度
-        console.log('📝 Serialized signed transaction length:', serializedTransaction.length);
-        // Send the transaction
         let signature;
         try {
-          signature = await connection.sendRawTransaction(serializedTransaction);
+          signature = await sendTransaction(transaction, connection);
         } catch (sendError) {
           // Check if this is an "already been processed" error, which means success
           if (sendError.message && sendError.message.includes('already been processed')) {

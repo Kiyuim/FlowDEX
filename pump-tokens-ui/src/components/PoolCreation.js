@@ -6,7 +6,7 @@ import { Buffer } from 'buffer';
 import * as aSDK from '@solana/spl-token-registry';
 
 const PoolCreation = () => {
-  const { publicKey, connected, sendTransaction, signTransaction } = useWallet();
+  const { publicKey, connected, sendTransaction } = useWallet();
   const { connection } = useConnection();
   
   // Form state
@@ -303,24 +303,16 @@ const PoolCreation = () => {
           console.time('Transaction Signing');
           
           try {
-            // First try direct signing if available
-            if (signTransaction && deserializationMethod !== 'minimal') {
-              console.log('Attempting direct transaction signing first...');
-              const signedTx = await signTransaction(transaction);
-              console.log('Transaction signed successfully, now sending...');
-              const signature = await connection.sendRawTransaction(
-                signedTx.serialize(),
-                sendOptions
-              );
-              console.log('🚀 Transaction sent via direct signing:', signature);
-              setTxSignature(signature);
-            } else {
-              // Fall back to sendTransaction
-              console.log('Using sendTransaction method...');
-              const signature = await sendTransaction(transaction, connection, sendOptions);
-              console.log('🚀 Transaction sent via sendTransaction:', signature);
-              setTxSignature(signature);
-            }
+            // Use wallet-adapter's own sendTransaction rather than manually
+            // signing + re-serializing + sendRawTransaction: that round-trip
+            // through app code (sign, then serialize the signed result
+            // ourselves) is what produced "signature has invalid length" for
+            // some wallets. sendTransaction lets the wallet extension use its
+            // own atomic signAndSendTransaction where available.
+            console.log('Sending transaction via wallet-adapter...');
+            const signature = await sendTransaction(transaction, connection, sendOptions);
+            console.log('🚀 Transaction sent:', signature);
+            setTxSignature(signature);
           } catch (signError) {
             console.error('❌ Transaction signing/sending error:', signError);
             console.error('Error details:', {
@@ -506,13 +498,6 @@ const PoolCreation = () => {
             >
               {txSignature.slice(0, 8)}...{txSignature.slice(-8)}
             </a>
-            </div>
-          )}
-
-        {debugInfo && (
-          <div className="debug-info">
-            <h4>Transaction Debug Info:</h4>
-            <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
             </div>
           )}
 

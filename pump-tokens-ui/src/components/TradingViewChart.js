@@ -611,7 +611,7 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
 
       {error && (
         <div className="chart-error">
-          <span>⚠️ {error}</span>
+          <span>{error === 'No chart data available for this token' ? '🌱' : '⚠️'} {error}</span>
           <button onClick={() => fetchKlineData(interval)}>Retry</button>
         </div>
       )}
