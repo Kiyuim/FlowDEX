@@ -2,6 +2,7 @@ package block
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,6 +33,7 @@ type ProgramWatcher struct {
 	seen     map[string]struct{}
 	seenMu   sync.Mutex
 	started  time.Time
+	rpc      *client.Client // nil → round-robin consumer clients
 }
 
 const (
@@ -42,12 +44,22 @@ const (
 
 func NewProgramWatcher(sc *svc.ServiceContext) *ProgramWatcher {
 	bs := NewBlockService(sc, "program-watcher", make(chan uint64), 0)
-	return &ProgramWatcher{
+	w := &ProgramWatcher{
 		BlockService: bs,
 		programs:     []string{ProgramStrPumpMeteora, ProgramStrPumpMeteoraOpt},
 		seen:         make(map[string]struct{}),
 		started:      time.Now(),
 	}
+	// The watcher makes ~1 call/s; give it the primary (SOL_NODE_URL) endpoint
+	// rather than the scanner's CONSUMER_SOL_NODE_URL, which is the one being
+	// hammered with getBlock and rate-limited.
+	if u := strings.TrimSpace(sc.Config.Sol.NodeUrlEnv); u != "" {
+		if i := strings.Index(u, ","); i > 0 {
+			u = u[:i]
+		}
+		w.rpc = client.NewClient(u)
+	}
+	return w
 }
 
 func (w *ProgramWatcher) Start() {
@@ -87,7 +99,10 @@ func (w *ProgramWatcher) poll(program string) {
 	ctx, cancel := context.WithTimeout(w.ctx, 20*time.Second)
 	defer cancel()
 
-	c := w.sc.GetSolClient()
+	c := w.rpc
+	if c == nil {
+		c = w.sc.GetSolClient()
+	}
 	sigs, err := c.GetSignaturesForAddressWithConfig(ctx, program, client.GetSignaturesForAddressConfig{
 		Limit:      watcherSigLimit,
 		Commitment: rpc.CommitmentConfirmed,
