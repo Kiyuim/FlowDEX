@@ -94,21 +94,45 @@
   same bug pattern as the earlier fake toggle). Mint sizing uses
   `getMintLen([])` instead of a hardcoded 82-byte constant.
 
+- **Real on-chain block ingestion fixed** (the deepest bug in the project):
+  `getSolBlockInfo error: ... parse signature error` was failing on
+  essentially every devnet block, and `trade size: 0` for every single one
+  — real ingestion had likely never worked. Root-caused with a standalone
+  repro tool: the failing bytes are Vote-program transactions using a
+  newer, more compact wire format; confirmed independently against
+  `gagliardetto/solana-go` (already a project dependency), which fails on
+  the *identical* bytes with `numSignatures 129 is too large for remaining
+  bytes 288` — so this was never a blocto-specific parser bug, and it's
+  data the DEX has no reason to read anyway. The actual bug was
+  `convertBlock` aborting the **entire block** the instant any single
+  transaction failed to parse, silently discarding every real Pump.fun/
+  Raydium swap in that block along with the irrelevant vote tx. Patched to
+  skip and log unparseable transactions instead. Verified live: blocks
+  that previously failed `GetBlockWithConfig` outright now return 24-48
+  real transactions each; `getSolBlockInfo error` no longer appears at all.
+  `trade_size` is still 0 in the blocks checked so far — plausibly just low
+  swap volume on devnet right now, not a parsing issue — worth monitoring
+  over a longer window to see a real trade actually land.
+- **Wallet-select-button visual consistency**: normalized the Connect/
+  Connecting/Disconnect button's padding, font-size, and border-radius
+  across all three states to match `.tab-btn`, for consistent header
+  alignment.
+- **Token-2022 launch-target UI**: replaced the toggle-switch with a 3-tab
+  selector (Standard SPL / Token-2022 / PumpMeteora) per requested reference
+  design.
+
 ## Still open
 
-- **Create Token: PumpMeteora / PumpMeteora V2 launch targets**: requested,
-  not started. Needs understanding the PumpMeteora on-chain program
-  interface (bonding curve init instruction, fixed decimals/supply per the
-  program) — this is new on-chain integration work, not a UI-only change.
+- **Create Token: PumpMeteora launch target**: UI tab now exists
+  (disabled, "not implemented yet") but isn't wired to anything on-chain.
+  Blocked on the actual PumpMeteora program interface — it isn't a
+  documented public program (websearch only turns up separate Pump.fun and
+  Meteora Dynamic Bonding Curve programs, neither matching the "241xjm…"
+  prefix mentioned), and guessing at instruction/account layouts for an
+  unknown program risks building transactions that either fail outright or
+  behave unexpectedly on-chain. Needs the program ID + IDL from wherever
+  this reference originally came from.
 - **Wallet-select modal off-center / "on the right side"**: reviewed the
   code — `position:fixed; inset:0; flex-center` is textbook-correct. Couldn't
   reproduce a bug in our own modal; likely the wallet browser extension's own
   OS-level popup, which we don't control.
-- **Solana transaction deserialization**: `blocto/solana-go-sdk` fails to
-  parse a chunk of real devnet blocks even after the vendored
-  `MaxSupportedTransactionVersion` patch (`failed to deserialize
-  transaction, err: parse signature error`) — real on-chain data ingestion
-  still isn't fully working. This is also why `block.sol_price` has never
-  been populated by the real pipeline. Needs either a deeper fix to the
-  vendored SDK's transaction parser or a switch to `gagliardetto/solana-go`
-  for block fetching.
