@@ -33,7 +33,7 @@ function chartTimeToDate(time) {
   return new Date(NaN);
 }
 
-const TradingViewChart = ({ token, visible = true, mockMode = false, refreshKey = 0 }) => {
+const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = false, refreshKey = 0 }) => {
   const chartContainerRef = useRef();
   const chartRef = useRef();
   const candlestickSeriesRef = useRef();
@@ -46,6 +46,53 @@ const TradingViewChart = ({ token, visible = true, mockMode = false, refreshKey 
   const mockIntervalRef = useRef(null);
   const candleDataRef = useRef([]); // full series, kept in time order, for prev-close lookup
   const [clickInfo, setClickInfo] = useState(null); // { x, y, candle, prevClose }
+
+  // The direct on-chain trade hook can be newer than the Railway indexer. Fold
+  // those trades into the current candle so the chart does not wait for the
+  // consumer to catch up before showing the last few minutes.
+  useEffect(() => {
+    if (!candlestickSeriesRef.current || !liveTrades?.length) return;
+    const intervalSeconds = {
+      '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400,
+    }[interval] || 3600;
+    const grouped = new Map();
+    for (const trade of liveTrades) {
+      const time = Number(trade.time);
+      const price = Number(trade.priceUsd);
+      if (!Number.isFinite(time) || time <= 0 || !Number.isFinite(price) || price <= 0) continue;
+      const bucket = Math.floor(time / intervalSeconds) * intervalSeconds;
+      const row = grouped.get(bucket) || { time: bucket, open: price, high: price, low: price, close: price, first: time, last: time };
+      if (time < row.first) { row.first = time; row.open = price; }
+      if (time > row.last) { row.last = time; row.close = price; }
+      row.high = Math.max(row.high, price);
+      row.low = Math.min(row.low, price);
+      grouped.set(bucket, row);
+    }
+    if (!grouped.size) return;
+
+    const merged = candleDataRef.current.slice();
+    for (const [bucket, incoming] of grouped) {
+      const idx = merged.findIndex((c) => c.time === bucket);
+      if (idx < 0) merged.push(incoming);
+      else {
+        const current = merged[idx];
+        merged[idx] = {
+          ...current,
+          open: current.open > 0 ? current.open : incoming.open,
+          high: Math.max(current.high, incoming.high),
+          low: Math.min(current.low, incoming.low),
+          close: incoming.close,
+        };
+      }
+    }
+    merged.sort((a, b) => a.time - b.time);
+    candleDataRef.current = merged;
+    try {
+      candlestickSeriesRef.current.setData(merged);
+    } catch (e) {
+      console.warn('Unable to merge live trades into kline:', e);
+    }
+  }, [liveTrades, interval]);
 
   // Initialize chart
   useEffect(() => {

@@ -30,6 +30,12 @@
   goroutine per slot, overwhelming the RPC provider and causing throttling.
   Block processing now uses the existing bounded ants pool (5 in-flight jobs
   per worker) so the indexer can catch up instead of amplifying the backlog.
+- Token detail now passes the same resolved header price into the limit-order
+  panel, so its `now` value cannot disagree with the displayed Price because
+  one used stale indexed metadata and the other used a newer RPC trade.
+- K-line now merges the direct on-chain trade stream into the visible candles,
+  so the latest trades appear immediately even while the Railway consumer is
+  catching up.
 
 - Automatic follow-up sells for double-out/trailing-stop still require an SPL
   delegate approval transaction signed by the user's wallet. The reference

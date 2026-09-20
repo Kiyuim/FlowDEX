@@ -186,7 +186,7 @@ export default function TokenDetail() {
                 // trades — an old seeded token can have real backend kline
                 // history with zero on-chain trades (or vice versa for a
                 // brand-new one). It shows its own empty state either way.
-                <TradingViewChart token={chartToken} refreshKey={chartRefresh} visible />
+                <TradingViewChart token={chartToken} liveTrades={trades} refreshKey={chartRefresh} visible />
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
                   <div className="text-4xl">🌱</div>
@@ -284,7 +284,11 @@ export default function TokenDetail() {
             <>
               <TradePanel
                 token={token}
-                currentPriceUsd={stats?.price ?? reserves?.priceUsd ?? 0}
+                // Use the same resolved price shown in the header. Previously
+                // the header preferred indexed token.price while the limit
+                // panel used the latest RPC trade, so "now" could disagree
+                // with Price (for example 3.33e-6 vs 3.39e-6).
+                currentPriceUsd={displayPrice ?? reserves?.priceUsd ?? 0}
                 onLimitOrderPlaced={() => setOrdersTick((t) => t + 1)}
                 onTradeComplete={handleTradeComplete}
               />
