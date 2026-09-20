@@ -39,6 +39,9 @@
 - K-line now merges the direct on-chain trade stream into the visible candles,
   so the latest trades appear immediately even while the Railway consumer is
   catching up.
+- Fixed the chart initialization race where on-chain trades could arrive
+  before `createChart`; those trades are now retained and merged on the first
+  backend refresh instead of being lost from the K-line only.
 
 - Automatic follow-up sells for double-out/trailing-stop still require an SPL
   delegate approval transaction signed by the user's wallet. The reference

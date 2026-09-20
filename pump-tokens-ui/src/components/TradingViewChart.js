@@ -87,8 +87,12 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
   // those trades into the current candle so the chart does not wait for the
   // consumer to catch up before showing the last few minutes.
   useEffect(() => {
+    // Save the data even if the chart has not finished mounting yet. The
+    // chain hook can resolve before createChart; returning before this line
+    // left the fetch path with an empty ref forever, so Recent trades updated
+    // while the chart remained stuck at the last indexed candle.
+    liveTradesRef.current = liveTrades || [];
     if (!candlestickSeriesRef.current || !liveTrades?.length) return;
-    liveTradesRef.current = liveTrades;
     const merged = mergeLiveTradeCandles(candleDataRef.current, liveTrades, interval);
     candleDataRef.current = merged;
     try {
