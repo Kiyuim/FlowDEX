@@ -613,3 +613,48 @@ status --json`.)
 - Removed the fixed-height wrapper around the chart and made the chart resize
   from its actual container. This prevents the chart from shifting below its
   card when the header/stat rows change height.
+
+## Indexing reliability + real-time chart (2026-09-20, evening)
+
+Measured, then fixed, in order:
+
+- **Slot gaps**: `slotSubscribe` is not gap-free — 921 of 5,000 slots (18%)
+  never entered the pipeline (no block row), so every trade in them was
+  missed (typically the sell right after a buy → candles without wicks,
+  "disappearing" sells after refresh). Fixed: fill gaps between
+  consecutive notifications (`slot/ws.go`), and scan the last 6,000 slots
+  for absent rows every 5s and enqueue them (`slot/not_complete.go`).
+- **Dropped blocks**: `getBlock` errors other than "limit"/"not available"
+  (e.g. 429 from the public RPC) were not retried, the row was saved with
+  status 0 that nothing looked for, and the retry service exited at
+  startup and pushed to a channel nobody consumed. Fixed: retry 429s, save
+  as BlockFailed with err_message, continuous retry loop on a fixed budget.
+- **RPC contention**: one Helius key shared by indexer/trade/browser
+  (33% 429s at 16 workers, 85% at 16×5 in-flight). Fixed: consumer on its
+  own endpoint via `CONSUMER_SOL_NODE_URL` (currently the public devnet
+  RPC — slower; a dedicated Helius key would cut index latency further),
+  bounded in-flight work per worker (Codex), `CONSUMER_CONCURRENCY=6`.
+- **Duplicates**: re-fetched blocks re-inserted trades (no unique key on
+  tx_hash). Fixed: dedupe on tx_hash+hash_id+trade_type in
+  `BatchInsertTrades`; 4 existing duplicates deleted.
+- **Candle price basis**: OHLC used average execution price, so a sell right
+  after a buy charted green. Consumer now attaches `spot_price_usd` (virtual
+  reserves × SOL/USD) and dataflow builds OHLC from it. Historical candles
+  before this change keep the old basis.
+- **Frontend**: token page reads trades/stats from `/v1/market/recent_trades`
+  (same index as the list card); on-chain events newer than the index show
+  live on top and drive provisional chart ticks (~1s); chart polls every
+  5s, never freezes on a hung request, opens each candle at previous close,
+  volume histogram, local-time axis, 1m default; SOL/USD from backend.
+- **Orders**: ConfirmMarketOrder (client-signed outcome), ticker confirms
+  at `confirmed` after 2s; QueryOrderHistory implemented; stale Proc
+  orders cancellable after 2 minutes.
+
+Still open:
+- Index latency is bounded by the public RPC (22–36s observed under load
+  vs 2–12s on Helius). A dedicated Helius key for `CONSUMER_SOL_NODE_URL`
+  is the cheapest fix; the structural fix is program-log-driven ingestion
+  (logsSubscribe on the 3 program IDs + getTransaction) instead of
+  fetching every block.
+- Double-out/trailing follow-up sells still execute custodially (server
+  wallet); a non-custodial version needs an SPL delegate-approval flow.
