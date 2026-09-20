@@ -49,7 +49,8 @@ type KlineUpdateMessage struct {
 	High        float64 `json:"high"`
 	Low         float64 `json:"low"`
 	Close       float64 `json:"close"`
-	Volume      float64 `json:"volume"`
+	Volume      float64 `json:"volume"`       // USD
+	VolumeToken float64 `json:"volume_token"` // tokens, same unit as get_candlestick's volumeToken
 	Timestamp   int64   `json:"timestamp"`
 }
 
@@ -184,6 +185,7 @@ func (t *TradeConsumer) publishKlineUpdate(ctx context.Context, kline *datakline
 		Low:         kline.Low,
 		Close:       kline.Close,
 		Volume:      kline.AmountUsd,
+		VolumeToken: kline.VolumeToken,
 		Timestamp:   time.Now().Unix(),
 	}
 

@@ -60,6 +60,7 @@ type KlineData struct {
 	Low         float64 `json:"low"`
 	Close       float64 `json:"close"`
 	Volume      float64 `json:"volume"`
+	VolumeToken float64 `json:"volume_token"`
 	Timestamp   int64   `json:"timestamp"`
 }
 

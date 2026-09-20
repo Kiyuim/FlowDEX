@@ -88,6 +88,21 @@ function fillCandleGaps(candles, intervalSeconds, maxBars = 300) {
   return filled.slice(-maxBars);
 }
 
+
+// Mirrors a candle array onto the volume histogram (green up / red down,
+// dim for zero-volume continuation candles).
+function volumeBars(candles) {
+  return candles.map((c) => ({
+    time: c.time,
+    value: Number(c.volume) || 0,
+    color: !c.volume ? 'rgba(120,120,120,0.15)' : c.close >= c.open ? 'rgba(0,212,170,0.55)' : 'rgba(255,104,56,0.55)',
+  }));
+}
+function applyVolume(volumeSeries, candles) {
+  if (!volumeSeries) return;
+  try { volumeSeries.setData(volumeBars(candles || [])); } catch (e) { console.warn('volume setData', e); }
+}
+
 // Sequentially updates candlestickSeries so no intermediate or gap-filled candles are skipped,
 // while preserving lightweight-charts zoom/pan state and animating wicks smoothly.
 function applyCandleUpdates(candlestickSeries, oldData, newData) {
@@ -184,6 +199,7 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
   const chartContainerRef = useRef();
   const chartRef = useRef();
   const candlestickSeriesRef = useRef();
+  const volumeSeriesRef = useRef();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [interval, setChartInterval] = useState('1m');
@@ -300,6 +316,17 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
       chartRef.current = chart;
       candlestickSeriesRef.current = candlestickSeries;
 
+      // Volume histogram under the candles. On a bonding curve a small
+      // trade barely moves price (O=H=L=C), so its candle is a 1px tick
+      // identical to the gap-fill candles around it — volume is the only
+      // thing that makes such a trade visible on the chart.
+      const volumeSeries = chart.addHistogramSeries({
+        priceFormat: { type: 'volume' },
+        priceScaleId: 'volume',
+      });
+      chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
+      volumeSeriesRef.current = volumeSeries;
+
       // GMGN-style click-to-inspect: clicking a candle shows a floating card
       // with its O/H/L/C, volume and % change at the click point.
       chart.subscribeClick((param) => {
@@ -358,6 +385,7 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
         chart.remove();
         chartRef.current = null;
         candlestickSeriesRef.current = null;
+        volumeSeriesRef.current = null;
       };
     } catch (error) {
       console.error('Error creating TradingView chart:', error);
@@ -576,6 +604,8 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
                 high: parseFloat(klineData.high || 0),
                 low: parseFloat(klineData.low || 0),
                 close: parseFloat(klineData.close || 0),
+                // dataflow publishes AmountUsd as "volume"; volume_token when present
+                volume: parseFloat(klineData.volume_token || klineData.volumeToken || klineData.volume || 0) || 0,
               };
               
               // Validate price data
@@ -595,6 +625,7 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
                 const filled = fillCandleGaps(nextCandles, intervalSeconds);
                 applyCandleUpdates(candlestickSeriesRef.current, candleDataRef.current, filled);
                 candleDataRef.current = filled;
+                applyVolume(volumeSeriesRef.current, filled);
                 notifyCandleStats(filled);
                 setError('');
                 console.log('Chart updated successfully with timestamp:', chartData.time);
@@ -755,6 +786,7 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
             high: high,
             low: low,
             close: close,
+            volume: parseFloat(kline.volumeToken || kline.volume_token || kline.volume || kline.Volume || 0) || 0,
           };
         })
         .filter(item => item !== null)
@@ -772,6 +804,7 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
           applyCandleUpdates(candlestickSeriesRef.current, candleDataRef.current, mergedChartData);
           candleDataRef.current = mergedChartData;
         }
+        applyVolume(volumeSeriesRef.current, mergedChartData);
         setError('');
         notifyCandleStats(mergedChartData);
         
@@ -786,6 +819,7 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
         // without this, switching to a token with no data yet still showed
         // the old candles underneath the "no data" placeholder.
         candlestickSeriesRef.current.setData([]);
+        volumeSeriesRef.current?.setData([]);
         candleDataRef.current = [];
         setError('No chart data available for this token');
       }
