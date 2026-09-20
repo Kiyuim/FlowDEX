@@ -94,6 +94,7 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.CreateMarketOrderRe
 	})
 	fmt.Println("*********************2222***************")
 	if err != nil {
+		fmt.Println("PROBE_DEBUG_FALLBACK_ENTERED: err =", err, "SolTxMananger nil?", l.svcCtx.SolTxMananger == nil)
 		// Not indexed yet (e.g. a token just created — the consumer hasn't
 		// caught its creation block, or hasn't caught up at all). The swap
 		// itself is always built from live on-chain pool state regardless of
