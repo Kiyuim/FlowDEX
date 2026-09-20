@@ -200,17 +200,17 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.CreateMarketOrderRe
 		order.TradeType = int64(trade.TradeType_OneClick)
 	}
 
-	// Double-out and trailing-stop-attached buys run custodially: the server
-	// wallet pays, signs and holds the tokens, so the auto-created sell leg can
-	// later be executed server-side too (the user isn't around to sign either
-	// leg after checkout).
-	if (in.DoubleOut || in.TrailingPercent > 0) && in.SwapType == trade.SwapType_Buy {
-		serverWallet, err := chainsolana.ServerWalletAddress()
-		if err != nil {
-			return nil, fmt.Errorf("double-out requires the server wallet: %v", err)
-		}
-		order.WalletAddress = serverWallet
-	}
+	// The buy itself always executes through the user's own wallet — same
+	// signed, unsigned-tx-returned-to-the-client flow as a plain buy — so the
+	// tokens land in the user's own holdings. (Previously this rerouted the
+	// whole buy through the server wallet whenever double-out/trailing-stop
+	// was checked, which meant the user never actually received the tokens
+	// and couldn't get them back by cancelling — the server held them, not
+	// the user. The auto-created follow-up sell leg still can't execute
+	// without the user's tokens in server custody; until that's built with a
+	// proper SPL delegate-approval flow, the follow-up order will show as
+	// Failed in Open Orders when its trigger fires, rather than silently
+	// mis-custodying funds.)
 
 	err = model.InsertWithLog(l.ctx, order)
 	if err != nil {
@@ -465,13 +465,12 @@ func (l *CreateMarketOrderLogic) createMarketTxWithPairInfo(order *trademodel.Tr
 		InTokenProgram: inTokenProgram,
 		// 输出代币的合约类型 token/token2022
 		OutTokenProgram: outTokenProgram,
-		// 限价单/移动止损触发时用户不在场，由服务端持有的密钥代签并直接上链；
-		// 翻倍出本的买单同样托管执行（后续自动卖单也要由服务端卖出）
+		// 限价单/移动止损触发时用户不在场，由服务端持有的密钥代签并直接上链。
+		// 翻倍出本/移动止损的买单本身由用户自己签名（走下面的未签名交易分支），
+		// 只有后续自动触发的卖单才会用到服务端代签。
 		ServerSign: order.TradeType == int64(trade.TradeType_Limit) ||
 			order.TradeType == int64(trade.TradeType_TokenCapLimit) ||
-			order.TradeType == int64(trade.TradeType_TrailingStop) ||
-			(order.DoubleOut == 1 && order.SwapType == int64(trade.SwapType_Buy)) ||
-			(order.TrailingPercent > 0 && order.SwapType == int64(trade.SwapType_Buy)),
+			order.TradeType == int64(trade.TradeType_TrailingStop),
 	}
 
 	// to make and send tx

@@ -53,11 +53,10 @@ export async function submitMarketOrder({
   const b64 = data.data?.txHash || data.txHash || data.tx_hash;
   if (!b64) throw new Error('No transaction returned by server');
 
-  // Double-out and trailing-stop-attached buys are executed custodially: the
-  // platform wallet signs and submits (it must also hold the tokens so the
-  // auto sell leg can execute later). The response is already a final
-  // on-chain signature — not an unsigned tx — nothing for the user to sign.
-  if (doubleOut || trailingPercent > 0) return b64;
+  // Every buy — including double-out/trailing-stop-attached ones — is an
+  // unsigned tx the user signs here, so the tokens land in their own wallet.
+  // Only the auto-created follow-up sell leg (2x sell / drawdown sell) is
+  // executed server-side later, once it triggers.
 
   // 2) decode (legacy or versioned)
   const buf = Buffer.from(b64, 'base64');
