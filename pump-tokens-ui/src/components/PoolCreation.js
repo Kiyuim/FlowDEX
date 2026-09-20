@@ -530,12 +530,7 @@ const PoolCreation = () => {
             </div>
           )}
 
-        {debugInfo && (
-          <div className="debug-info">
-            <h4>Transaction Debug Info:</h4>
-            <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
-            </div>
-          )}
+        {debugInfo && console.log('Transaction Debug Info:', debugInfo)}
 
             <button
           className="create-pool-button" 

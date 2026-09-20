@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { 
-  PublicKey, 
-  Transaction, 
+import {
+  PublicKey,
+  Transaction,
+  TransactionInstruction,
   SystemProgram,
   Keypair,
+  ComputeBudgetProgram,
   LAMPORTS_PER_SOL
 } from '@solana/web3.js';
 import {
@@ -15,12 +17,94 @@ import {
   getMintLen,
   TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
 import './TokenCreation.css';
 
 const API_BASE_URL = process.env.NODE_ENV === 'development'
   ? '' // Use proxy in development
   : '/direct-api'; // Use Nginx proxy in production (via /direct-api)
+
+// PumpMeteora: a Pump.fun-style bonding-curve fork deployed on devnet for
+// this course. Not a documented public program — this interface (PDAs,
+// discriminator, account order) was reverse-engineered from the reference
+// site's own production JS bundle (pump-tokens-ui.vercel.app), not guessed.
+const PUMPMETEORA_PROGRAMS = {
+  meteora: new PublicKey('AEBUS7kBka3pg5HyzUqgDYspvAPjFryyXjA5ZvRhUJU5'),
+  meteorav2: new PublicKey('241xjmD7ozZGrhyBgVn1MSs5eHXe1QPpD1vJgPNRQRzQ'),
+};
+const PUMPMETEORA_LABELS = {
+  meteora: 'PumpMeteora',
+  meteorav2: 'PumpMeteora V2',
+};
+const METAPLEX_METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+// Anchor discriminator: sha256("global:create")[:8], shared by both program versions.
+const PUMPMETEORA_CREATE_DISCRIMINATOR = Uint8Array.from([94, 139, 158, 50, 69, 95, 8, 45]);
+
+function encodeBorshString(str) {
+  const bytes = new TextEncoder().encode(str);
+  const buf = new Uint8Array(4 + bytes.length);
+  new DataView(buf.buffer).setUint32(0, bytes.length, true);
+  buf.set(bytes, 4);
+  return buf;
+}
+
+function findPda(seeds, programId) {
+  return PublicKey.findProgramAddressSync(seeds, programId)[0];
+}
+
+// Mirrors the reference site's create-instruction builder exactly (PDA
+// seeds, account order, and instruction data layout) — the "config" PDA
+// must already be initialized on-chain for this program (the fee recipient
+// lives in its data at bytes [72,104)); if it isn't, this throws rather
+// than building a transaction that would just fail on-chain.
+async function buildPumpMeteoraCreateInstruction(connection, programId, payer, mint, { name, symbol, uri }) {
+  const configPda = findPda([new TextEncoder().encode('config')], programId);
+  const globalPda = findPda([new TextEncoder().encode('global')], programId);
+  const bondingCurvePda = findPda([new TextEncoder().encode('bonding_curve'), mint.toBuffer()], programId);
+  const metadataPda = findPda(
+    [new TextEncoder().encode('metadata'), METAPLEX_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    METAPLEX_METADATA_PROGRAM_ID
+  );
+  const bondingCurveAta = findPda(
+    [bondingCurvePda.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+
+  const configInfo = await connection.getAccountInfo(configPda);
+  if (!configInfo || !configInfo.data || configInfo.data.length < 104) {
+    throw new Error('This program has no initialized config on-chain — cannot create a token here.');
+  }
+  const feeRecipient = new PublicKey(configInfo.data.slice(72, 104));
+
+  const nameBytes = encodeBorshString(name);
+  const symbolBytes = encodeBorshString(symbol);
+  const uriBytes = encodeBorshString(uri);
+  const data = new Uint8Array(8 + nameBytes.length + symbolBytes.length + uriBytes.length);
+  data.set(PUMPMETEORA_CREATE_DISCRIMINATOR, 0);
+  let offset = 8;
+  data.set(nameBytes, offset); offset += nameBytes.length;
+  data.set(symbolBytes, offset); offset += symbolBytes.length;
+  data.set(uriBytes, offset);
+
+  const keys = [
+    { pubkey: configPda, isSigner: false, isWritable: true },
+    { pubkey: globalPda, isSigner: false, isWritable: true },
+    { pubkey: payer, isSigner: true, isWritable: true },
+    { pubkey: mint, isSigner: true, isWritable: true },
+    { pubkey: bondingCurvePda, isSigner: false, isWritable: true },
+    { pubkey: metadataPda, isSigner: false, isWritable: true },
+    { pubkey: bondingCurveAta, isSigner: false, isWritable: true },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    { pubkey: new PublicKey('SysvarRent111111111111111111111111111111111'), isSigner: false, isWritable: false },
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: METAPLEX_METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: feeRecipient, isSigner: false, isWritable: true },
+  ];
+
+  return new TransactionInstruction({ programId, keys, data: Buffer.from(data) });
+}
 
 const TokenCreation = () => {
   const { publicKey, connected, signTransaction, sendTransaction } = useWallet();
@@ -37,9 +121,10 @@ const TokenCreation = () => {
     freezeAuthority: true,
     updateAuthority: true
   });
-  // 'standard' | 'token2022' | 'pumpmeteora'
+  // 'standard' | 'token2022' | 'meteora' | 'meteorav2'
   const [launchTarget, setLaunchTarget] = useState('standard');
   const useToken2022 = launchTarget === 'token2022';
+  const isPumpMeteora = launchTarget === 'meteora' || launchTarget === 'meteorav2';
   
   // UI state
   const [isLoading, setIsLoading] = useState(false);
@@ -84,6 +169,12 @@ const TokenCreation = () => {
       console.log('🚀 Starting token creation...');
       console.log('Form data:', formData);
       console.log('Connected wallet:', publicKey.toString());
+
+      if (isPumpMeteora) {
+        await createPumpMeteoraToken();
+        return;
+      }
+
       // Generate new mint keypair
       const mintKeypair = Keypair.generate();
       console.log('✅ Generated mint keypair:', mintKeypair.publicKey.toString());
@@ -247,6 +338,55 @@ const TokenCreation = () => {
     }
   };
 
+  // Launches a bonding curve on the PumpMeteora program instead of minting
+  // a plain SPL token. Decimals/supply are fixed by the program itself (the
+  // form fields for those don't apply here) — only name/symbol/image feed
+  // into the on-chain metadata. Called from within createToken()'s try
+  // block, so its errors propagate to that function's existing catch/finally.
+  const createPumpMeteoraToken = async () => {
+    const programId = PUMPMETEORA_PROGRAMS[launchTarget];
+    const label = PUMPMETEORA_LABELS[launchTarget];
+    const mintKeypair = Keypair.generate();
+    console.log(`✅ Generated mint keypair for ${label}:`, mintKeypair.publicKey.toString());
+
+    const uri = (formData.image || '').trim() || 'https://ipfs.io/ipfs/bafkreih-placeholder.json';
+    const createIx = await buildPumpMeteoraCreateInstruction(connection, programId, publicKey, mintKeypair.publicKey, {
+      name: formData.name.trim(),
+      symbol: formData.symbol.trim(),
+      uri,
+    });
+
+    const transaction = new Transaction();
+    transaction.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }));
+    transaction.add(createIx);
+
+    const { blockhash } = await connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = publicKey;
+    transaction.partialSign(mintKeypair);
+
+    const signedTransaction = await signTransaction(transaction);
+    const txid = await connection.sendRawTransaction(signedTransaction.serialize());
+    await connection.confirmTransaction(txid, 'confirmed');
+
+    setSuccess(`${label} token created — it's now a live bonding curve. Trade it from the Sources page.`);
+    setTxSignature(txid);
+    setTokenMint(mintKeypair.publicKey.toString());
+
+    fetch(`${API_BASE_URL}/v1/market/record_user_asset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chain_id: 100000,
+        wallet_address: publicKey.toString(),
+        asset_type: 'token',
+        asset_name: formData.name,
+        asset_symbol: formData.symbol,
+        asset_address: mintKeypair.publicKey.toString(),
+      }),
+    }).catch(err => console.warn('⚠️ Failed to record token in Portfolio:', err));
+  };
+
   // Solana surfaces insufficient-balance failures as a raw simulation log
   // ("Attempt to debit an account but found no record of a prior credit" for
   // a wallet with 0 SOL, "insufficient lamports" once it has some but not
@@ -304,11 +444,19 @@ const TokenCreation = () => {
               </button>
               <button
                 type="button"
-                className={`tab-btn ${launchTarget === 'pumpmeteora' ? 'active' : ''}`}
-                onClick={() => setLaunchTarget('pumpmeteora')}
+                className={`tab-btn ${launchTarget === 'meteora' ? 'active' : ''}`}
+                onClick={() => setLaunchTarget('meteora')}
                 disabled={isLoading}
               >
                 🌊 PumpMeteora
+              </button>
+              <button
+                type="button"
+                className={`tab-btn ${launchTarget === 'meteorav2' ? 'active' : ''}`}
+                onClick={() => setLaunchTarget('meteorav2')}
+                disabled={isLoading}
+              >
+                🛡️ PumpMeteora V2
               </button>
             </div>
             {launchTarget === 'standard' && (
@@ -317,10 +465,12 @@ const TokenCreation = () => {
             {launchTarget === 'token2022' && (
               <p className="info-text">Token-2022 (Token Extensions) program — same fields below, minted on the newer token program.</p>
             )}
-            {launchTarget === 'pumpmeteora' && (
+            {isPumpMeteora && (
               <p className="info-text">
-                🚧 Not implemented yet — launching a bonding curve on PumpMeteora needs its on-chain
-                program interface, which isn't in this codebase. Tracked in TODO.md.
+                Launches an on-chain bonding curve on {PUMPMETEORA_LABELS[launchTarget]} (
+                {PUMPMETEORA_PROGRAMS[launchTarget].toString().slice(0, 6)}…). Decimals & supply are
+                fixed by the program; name, symbol and image URL are used. Buy/sell it from the
+                Sources page.
               </p>
             )}
           </div>
@@ -352,47 +502,37 @@ const TokenCreation = () => {
               />
             </div>
 
-            <div className="input-group">
-              <label>Decimals</label>
-              <input
-                type="number"
-                name="decimals"
-                value={formData.decimals}
-                onChange={handleInputChange}
-                min="0"
-                max="9"
-                disabled={isLoading}
-              />
-            </div>
+            {!isPumpMeteora && (
+              <div className="input-group">
+                <label>Decimals</label>
+                <input
+                  type="number"
+                  name="decimals"
+                  value={formData.decimals}
+                  onChange={handleInputChange}
+                  min="0"
+                  max="9"
+                  disabled={isLoading}
+                />
+              </div>
+            )}
 
-            <div className="input-group">
-              <label>Initial Supply</label>
-              <input
-                type="number"
-                name="supply"
-                value={formData.supply}
-                onChange={handleInputChange}
-                min="1"
-                disabled={isLoading}
-              />
-            </div>
+            {!isPumpMeteora && (
+              <div className="input-group">
+                <label>Initial Supply</label>
+                <input
+                  type="number"
+                  name="supply"
+                  value={formData.supply}
+                  onChange={handleInputChange}
+                  min="1"
+                  disabled={isLoading}
+                />
+              </div>
+            )}
           </div>
 
-          {false && formData.useToken2022 && (
-            <div className="input-group">
-              <label>Description</label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                placeholder="Describe your token..."
-                rows="3"
-                disabled={isLoading}
-              />
-            </div>
-          )}
-
-          {false && formData.useToken2022 && (
+          {isPumpMeteora && (
             <div className="input-group">
               <label>Image URL</label>
               <input
@@ -406,36 +546,24 @@ const TokenCreation = () => {
             </div>
           )}
 
-          <div className="authorities-section">
-            <h3>🔐 Token Authorities</h3>
-            <div className="authorities-grid">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  name="freezeAuthority"
-                  checked={formData.freezeAuthority}
-                  onChange={handleInputChange}
-                  disabled={isLoading}
-                />
-                <span>🧊 Freeze Authority</span>
-                <small>Ability to freeze token accounts</small>
-              </label>
-
-              {false && formData.useToken2022 && (
+          {!isPumpMeteora && (
+            <div className="authorities-section">
+              <h3>🔐 Token Authorities</h3>
+              <div className="authorities-grid">
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
-                    name="updateAuthority"
-                    checked={formData.updateAuthority}
+                    name="freezeAuthority"
+                    checked={formData.freezeAuthority}
                     onChange={handleInputChange}
                     disabled={isLoading}
                   />
-                  <span>✏️ Update Authority</span>
-                  <small>Ability to update metadata</small>
+                  <span>🧊 Freeze Authority</span>
+                  <small>Ability to freeze token accounts</small>
                 </label>
-              )}
+              </div>
             </div>
-          </div>
+          )}
 
           {error && (
             <div className="error-message">
@@ -477,15 +605,13 @@ const TokenCreation = () => {
             <button
               className="create-token-btn"
               onClick={createToken}
-              disabled={isLoading || !connected || launchTarget === 'pumpmeteora'}
+              disabled={isLoading || !connected}
             >
               {isLoading ? (
                 <>
                   <span className="spinner"></span>
                   Creating Token...
                 </>
-              ) : launchTarget === 'pumpmeteora' ? (
-                <>🚧 Not implemented yet</>
               ) : (
                 <>
                   🚀 Create Token
