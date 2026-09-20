@@ -12,18 +12,15 @@ import {
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
   getAssociatedTokenAddress,
-  TOKEN_PROGRAM_ID
-  // TODO: bring back TOKEN_2022_PROGRAM_ID once real Token-2022 minting is
-  // implemented (createInitializeMint2Instruction + the 2022 ATA derivation).
+  getMintLen,
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token';
 import './TokenCreation.css';
 
 const API_BASE_URL = process.env.NODE_ENV === 'development'
   ? '' // Use proxy in development
   : '/direct-api'; // Use Nginx proxy in production (via /direct-api)
-
-// Standard sizes for SPL Token accounts
-const MINT_SIZE = 82; // Size of a mint account in bytes
 
 const TokenCreation = () => {
   const { publicKey, connected, signTransaction, sendTransaction } = useWallet();
@@ -40,6 +37,7 @@ const TokenCreation = () => {
     freezeAuthority: true,
     updateAuthority: true
   });
+  const [useToken2022, setUseToken2022] = useState(false);
   
   // UI state
   const [isLoading, setIsLoading] = useState(false);
@@ -88,12 +86,13 @@ const TokenCreation = () => {
       const mintKeypair = Keypair.generate();
       console.log('✅ Generated mint keypair:', mintKeypair.publicKey.toString());
 
-      // For now, use Token Program (Token-2022 will be added later when packages support it)
-      const tokenProgram = TOKEN_PROGRAM_ID;
+      const tokenProgram = useToken2022 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
       console.log('✅ Using token program:', tokenProgram.toString());
-      
-      // Calculate space needed for mint account  
-      const mintSpace = MINT_SIZE;
+
+      // Calculate space needed for mint account (no extensions requested,
+      // so this is 82 bytes for both Token and Token-2022 — getMintLen
+      // computes it correctly either way rather than hardcoding it).
+      const mintSpace = getMintLen([]);
       console.log('✅ Mint space calculated:', mintSpace);
 
       // Calculate rent
@@ -135,8 +134,8 @@ const TokenCreation = () => {
           mintKeypair.publicKey,    // mint
           formData.decimals,        // decimals
           publicKey,               // mintAuthority
-          freezeAuthority          // freezeAuthority (can be null)
-          // programId is optional (TOKEN_PROGRAM_ID by default)
+          freezeAuthority,         // freezeAuthority (can be null)
+          tokenProgram
         );
         transaction.add(initMintIx);
         console.log('✅ Added initialize mint instruction with decimals:', formData.decimals);
@@ -151,8 +150,8 @@ const TokenCreation = () => {
           publicKey,           // payer
           associatedTokenAccount, // associatedToken
           publicKey,           // owner
-          mintKeypair.publicKey   // mint
-          // Note: TOKEN_PROGRAM_ID is default, ASSOCIATED_TOKEN_PROGRAM_ID is default
+          mintKeypair.publicKey,  // mint
+          tokenProgram
         );
         transaction.add(createATAIx);
         console.log('✅ Added create ATA instruction');
@@ -170,9 +169,9 @@ const TokenCreation = () => {
           mintKeypair.publicKey,    // mint
           associatedTokenAccount,   // destination
           publicKey,               // authority (mint authority)
-          mintAmount              // amount
-          // multiSigners is optional (empty array by default)
-          // programId is optional (TOKEN_PROGRAM_ID by default)
+          mintAmount,              // amount
+          [],
+          tokenProgram
         );
         transaction.add(mintToIx);
         console.log('✅ Added mint to instruction');
@@ -266,14 +265,21 @@ const TokenCreation = () => {
         </div>
 
         <div className="form-section">
-          {/* TODO: real Token-2022 minting support (createInitializeMint2Instruction +
-              TOKEN_2022_PROGRAM_ID + the 2022-variant ATA derivation). Removed the toggle
-              that used to sit here — it never actually switched programs (tokenProgram
-              was hardcoded to TOKEN_PROGRAM_ID below), so it looked like a real setting
-              but silently did nothing. Every token this form creates is Classic SPL
-              Token for now. */}
           <div className="program-selector">
-            <span className="info-text">🔒 Classic SPL Token program (Token-2022 not supported yet)</span>
+            <label className="toggle-label">
+              <input
+                type="checkbox"
+                checked={useToken2022}
+                onChange={(e) => setUseToken2022(e.target.checked)}
+                disabled={isLoading}
+              />
+              <span className="toggle-slider"></span>
+              <span className="info-text">
+                {useToken2022
+                  ? '🆕 Token-2022 program (Token Extensions)'
+                  : '🔒 Classic SPL Token program'}
+              </span>
+            </label>
           </div>
 
           <div className="input-grid">
