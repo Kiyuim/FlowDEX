@@ -513,10 +513,19 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         console.log('WebSocket status:', wsConnection?.readyState === WebSocket.OPEN ? 'Connected' : 'Disconnected');
       } else {
         console.warn('No valid chart data to display');
+        // Clear any candles left over from a previously-viewed token —
+        // without this, switching to a token with no data yet still showed
+        // the old candles underneath the "no data" placeholder.
+        candlestickSeriesRef.current.setData([]);
+        candleDataRef.current = [];
         setError('No chart data available for this token');
       }
     } catch (error) {
       console.error('Error fetching kline data:', error);
+      if (candlestickSeriesRef.current) {
+        candlestickSeriesRef.current.setData([]);
+        candleDataRef.current = [];
+      }
       setError('Failed to load chart data: ' + error.message);
     } finally {
       setIsLoading(false);
