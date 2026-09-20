@@ -26,6 +26,10 @@
   instruction. K-line charts also use a 5-second polling safety net in
   addition to the WebSocket, and recent Meteora sell prices use execution
   amounts rather than the post-trade reserve ratio.
+- Consumer lag root cause found: each block worker spawned an unbounded
+  goroutine per slot, overwhelming the RPC provider and causing throttling.
+  Block processing now uses the existing bounded ants pool (5 in-flight jobs
+  per worker) so the indexer can catch up instead of amplifying the backlog.
 
 - Automatic follow-up sells for double-out/trailing-stop still require an SPL
   delegate approval transaction signed by the user's wallet. The reference

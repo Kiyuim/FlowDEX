@@ -1,8 +1,9 @@
 import { PublicKey } from '@solana/web3.js';
 import { Buffer } from 'buffer';
+import { getSolUsd } from './solPrice';
 
 export const PUMP_PROGRAM = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
-export const SOL_USD = 150; // nominal SOL price (matches the backend metadata)
+export const SOL_USD = 150; // legacy export; price math uses getSolUsd()
 export const TOKEN_DECIMALS = 6; // pump.fun standard
 
 export function deriveBondingCurve(mint) {
@@ -45,7 +46,7 @@ export function parseBondingCurve(data) {
     realToken: rToken / 10 ** TOKEN_DECIMALS,
     realSol: rSol / 1e9,
     complete,
-    priceUsd: vToken ? (vSol / 1e9 / (vToken / 10 ** TOKEN_DECIMALS)) * SOL_USD : 0,
+    priceUsd: vToken ? (vSol / 1e9 / (vToken / 10 ** TOKEN_DECIMALS)) * getSolUsd() : 0,
   };
 }
 
@@ -71,6 +72,6 @@ export function parsePumpEventLog(log) {
     maker,
     solAmount: solAmount / 1e9,
     tokenAmount: tokenAmount / 10 ** TOKEN_DECIMALS,
-    priceUsd: priceSol * SOL_USD,
+    priceUsd: priceSol * getSolUsd(),
   };
 }

@@ -5,7 +5,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { deriveBondingCurve, parseBondingCurve } from './pump';
 
-const SOL_USD = 150; // nominal SOL price (matches the backend metadata)
+import { getSolUsd } from './solPrice';
 
 // both meteora builds share the same leading BondingCurve layout + "bonding_curve" seed
 const METEORA_PROGRAMS = [
@@ -29,7 +29,7 @@ function parseMeteoraCurve(data) {
     realSol: u64(dv, 104) / 1e9,
     realToken: u64(dv, 112) / 1e6,
     complete: data[120] === 1,
-    priceUsd: virtualToken ? (virtualSol / virtualToken) * SOL_USD : 0,
+    priceUsd: virtualToken ? (virtualSol / virtualToken) * getSolUsd() : 0,
   };
 }
 

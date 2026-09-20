@@ -12,6 +12,7 @@ import {
 import {
   getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
+import { getSolUsd } from './solPrice';
 
 // program ids keyed by launch target
 export const METEORA_PROGRAMS = {
@@ -83,7 +84,6 @@ export async function buildCreateBondingCurveIx(connection, program, creator, mi
 // Mirrors consumer/internal/logic/sol/block/pump_meteora.go's MeteoraSwapEvent.
 // event discriminator = LE uint64 of anchor "event:Swap" = 0xe2710826e8cdc640
 const SWAP_EVENT_DISC = [0x40, 0xc6, 0xcd, 0xe8, 0x26, 0x08, 0x71, 0xe2]; // LE bytes of 0xe2710826e8cdc640
-const SOL_USD = 150; // nominal SOL price (matches lib/curve.js and the backend's devnet fallback)
 const TOKEN_DECIMALS = 6;
 
 export function deriveMeteoraBondingCurve(mint, program) {
@@ -131,7 +131,7 @@ export function parseMeteoraSwapEventLog(log) {
   // post-trade reserve ratio is exposed separately as spotPriceUsd — on a
   // thinly traded curve a sell can drain the SOL side to dust, which made
   // every sell row show ~1e-16 when that ratio was used as "price".
-  const spotPriceUsd = realTokenNum ? (realSolNum / realTokenNum) * SOL_USD : 0;
-  const priceUsd = tokenAmount > 0 ? (solAmount / tokenAmount) * SOL_USD : spotPriceUsd;
+  const spotPriceUsd = realTokenNum ? (realSolNum / realTokenNum) * getSolUsd() : 0;
+  const priceUsd = tokenAmount > 0 ? (solAmount / tokenAmount) * getSolUsd() : spotPriceUsd;
   return { isBuy, maker, solAmount, tokenAmount, priceUsd, spotPriceUsd };
 }

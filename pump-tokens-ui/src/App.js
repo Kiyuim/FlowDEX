@@ -40,6 +40,7 @@ import {
 } from '@solana/wallet-adapter-wallets';
 import { clusterApiUrl } from '@solana/web3.js';
 import '@solana/wallet-adapter-react-ui/styles.css';
+import { setSolUsd } from './lib/solPrice';
 
 // Initialize wallets with error handling
 // Using both standard adapters (auto-detected) and legacy adapters for maximum compatibility
@@ -540,6 +541,22 @@ function App() {
     console.log(`[${new Date().toLocaleTimeString()}] 🔀 Tab switching from`, activeTab, 'to', tab);
     setActiveTab(tab);
   };
+
+  // Keep client-side price math on the same SOL/USD the backend uses
+  // (index_pump carries its live CoinGecko value); refresh every minute.
+  useEffect(() => {
+    let alive = true;
+    const pull = async () => {
+      try {
+        const r = await fetch('/v1/market/index_pump?chain_id=100000&pump_status=1&page_no=1&page_size=1');
+        const d = await r.json();
+        if (alive) setSolUsd(d?.data?.solPriceUsd);
+      } catch {}
+    };
+    pull();
+    const t = setInterval(pull, 60000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
 
   // Track tab changes
   useEffect(() => {

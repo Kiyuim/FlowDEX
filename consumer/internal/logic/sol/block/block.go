@@ -51,6 +51,9 @@ type BlockService struct {
 
 func (s *BlockService) Stop() {
 	s.cancel(constants.ErrServiceStop)
+	if s.workerPool != nil {
+		s.workerPool.Release()
+	}
 	if s.Conn != nil {
 		err := s.Conn.WriteMessage(websocket.TextMessage, []byte("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\": \"blockUnsubscribe\", \"params\": [0]}\n"))
 		if err != nil {
@@ -95,9 +98,15 @@ func (s *BlockService) GetBlockFromHttp() {
 			}
 			//打印当前最新slot
 			// fmt.Println("current slot is:", slot)
-			threading.RunSafe(func() {
+			// Bound in-flight getBlock/decode work. The old RunSafe call spawned
+			// an unbounded goroutine for every slot, so a brief RPC slowdown could
+			// create hundreds of concurrent requests, trigger provider throttling,
+			// and make the consumer fall farther behind instead of catching up.
+			if err := s.workerPool.Submit(func() {
 				s.ProcessBlock(ctx, int64(slot))
-			})
+			}); err != nil {
+				s.Errorf("processBlock:%d enqueue failed: %v", slot, err)
+			}
 		}
 	}
 }
