@@ -1,5 +1,5 @@
 
-é¹
+¹À
 market.protomarket"‡
 Kline
 chain_id (RchainId
@@ -691,7 +691,36 @@ start_time (R	startTime
 freeze_authority (	RfreezeAuthority.
 mint_authority_safe (RmintAuthoritySafe2
 freeze_authority_safe (RfreezeAuthoritySafe)
-security_summary	 (	RsecuritySummary"X
+security_summary	 (	RsecuritySummary"l
+GetRecentTradesRequest
+chain_id (RchainId!
+pair_address (	RpairAddress
+limit (Rlimit"Ž
+RecentTrade
+tx_hash (	RtxHash
+
+trade_type (	R	tradeType*
+base_token_amount (RbaseTokenAmount!
+token_amount (RtokenAmount&
+token_price_usd (RtokenPriceUsd
+	total_usd (RtotalUsd
+maker (	Rmaker
+
+block_time (R	blockTime"å
+PairStats24h$
+last_price_usd (RlastPriceUsd
+
+change_24h (R	change24h
+vol_24h_usd (R	vol24hUsd
+txs_24h (Rtxs24h
+buys_24h (Rbuys24h
+	sells_24h (Rsells24h
+traders_24h (R
+traders24h"’
+GetRecentTradesResponse'
+list (2.market.RecentTradeRlist*
+stats (2.market.PairStats24hRstats"
+sol_price_usd (RsolPriceUsd"X
 GetUserTokensRequest
 chain_id (RchainId%
 wallet_address (	RwalletAddress"X
@@ -823,9 +852,10 @@ quickIntel
 Status
 UNKNOWN 	
 FALSE
-TRUE2’
+TRUE2æ
 MarketU
 GetPumpTokenList.market.GetPumpTokenListRequest .market.GetPumpTokenListResponseR
+GetRecentTrades.market.GetRecentTradesRequest.market.GetRecentTradesResponseR
 GetClmmPoolList.market.GetClmmPoolListRequest.market.GetClmmPoolListResponse=
 GetKline.market.GetKlineRequest.market.GetKlineResponse[
 GetPairInfoByToken!.market.GetPairInfoByTokenRequest".market.GetPairInfoByTokenResponse^

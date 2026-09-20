@@ -186,7 +186,7 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
   const candlestickSeriesRef = useRef();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [interval, setChartInterval] = useState('1h');
+  const [interval, setChartInterval] = useState('1m');
   const fetchGeneration = useRef(0);
   const pendingFetch = useRef(null);
   const [wsConnection, setWsConnection] = useState(null);

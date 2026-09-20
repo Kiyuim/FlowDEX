@@ -23,6 +23,11 @@ func NewMarketServer(svcCtx *svc.ServiceContext) *MarketServer {
 	}
 }
 
+func (s *MarketServer) GetRecentTrades(ctx context.Context, in *market.GetRecentTradesRequest) (*market.GetRecentTradesResponse, error) {
+	l := logic.NewGetRecentTradesLogic(ctx, s.svcCtx)
+	return l.GetRecentTrades(in)
+}
+
 func (s *MarketServer) GetPumpTokenList(ctx context.Context, in *market.GetPumpTokenListRequest) (*market.GetPumpTokenListResponse, error) {
 	l := logic.NewGetPumpTokenListLogic(ctx, s.svcCtx)
 	return l.GetPumpTokenList(in)

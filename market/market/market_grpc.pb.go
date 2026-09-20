@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	Market_GetPumpTokenList_FullMethodName    = "/market.Market/GetPumpTokenList"
+	Market_GetRecentTrades_FullMethodName     = "/market.Market/GetRecentTrades"
 	Market_GetClmmPoolList_FullMethodName     = "/market.Market/GetClmmPoolList"
 	Market_GetKline_FullMethodName            = "/market.Market/GetKline"
 	Market_GetPairInfoByToken_FullMethodName  = "/market.Market/GetPairInfoByToken"
@@ -37,6 +38,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MarketClient interface {
 	GetPumpTokenList(ctx context.Context, in *GetPumpTokenListRequest, opts ...grpc.CallOption) (*GetPumpTokenListResponse, error)
+	GetRecentTrades(ctx context.Context, in *GetRecentTradesRequest, opts ...grpc.CallOption) (*GetRecentTradesResponse, error)
 	GetClmmPoolList(ctx context.Context, in *GetClmmPoolListRequest, opts ...grpc.CallOption) (*GetClmmPoolListResponse, error)
 	GetKline(ctx context.Context, in *GetKlineRequest, opts ...grpc.CallOption) (*GetKlineResponse, error)
 	GetPairInfoByToken(ctx context.Context, in *GetPairInfoByTokenRequest, opts ...grpc.CallOption) (*GetPairInfoByTokenResponse, error)
@@ -61,6 +63,16 @@ func (c *marketClient) GetPumpTokenList(ctx context.Context, in *GetPumpTokenLis
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetPumpTokenListResponse)
 	err := c.cc.Invoke(ctx, Market_GetPumpTokenList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *marketClient) GetRecentTrades(ctx context.Context, in *GetRecentTradesRequest, opts ...grpc.CallOption) (*GetRecentTradesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRecentTradesResponse)
+	err := c.cc.Invoke(ctx, Market_GetRecentTrades_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +184,7 @@ func (c *marketClient) RecordUserAsset(ctx context.Context, in *RecordUserAssetR
 // for forward compatibility.
 type MarketServer interface {
 	GetPumpTokenList(context.Context, *GetPumpTokenListRequest) (*GetPumpTokenListResponse, error)
+	GetRecentTrades(context.Context, *GetRecentTradesRequest) (*GetRecentTradesResponse, error)
 	GetClmmPoolList(context.Context, *GetClmmPoolListRequest) (*GetClmmPoolListResponse, error)
 	GetKline(context.Context, *GetKlineRequest) (*GetKlineResponse, error)
 	GetPairInfoByToken(context.Context, *GetPairInfoByTokenRequest) (*GetPairInfoByTokenResponse, error)
@@ -194,6 +207,9 @@ type UnimplementedMarketServer struct{}
 
 func (UnimplementedMarketServer) GetPumpTokenList(context.Context, *GetPumpTokenListRequest) (*GetPumpTokenListResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPumpTokenList not implemented")
+}
+func (UnimplementedMarketServer) GetRecentTrades(context.Context, *GetRecentTradesRequest) (*GetRecentTradesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRecentTrades not implemented")
 }
 func (UnimplementedMarketServer) GetClmmPoolList(context.Context, *GetClmmPoolListRequest) (*GetClmmPoolListResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetClmmPoolList not implemented")
@@ -260,6 +276,24 @@ func _Market_GetPumpTokenList_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MarketServer).GetPumpTokenList(ctx, req.(*GetPumpTokenListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Market_GetRecentTrades_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRecentTradesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServer).GetRecentTrades(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Market_GetRecentTrades_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServer).GetRecentTrades(ctx, req.(*GetRecentTradesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -454,6 +488,10 @@ var Market_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPumpTokenList",
 			Handler:    _Market_GetPumpTokenList_Handler,
+		},
+		{
+			MethodName: "GetRecentTrades",
+			Handler:    _Market_GetRecentTrades_Handler,
 		},
 		{
 			MethodName: "GetClmmPoolList",

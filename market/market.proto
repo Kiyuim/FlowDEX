@@ -791,8 +791,44 @@ message TokenSecurityCheckResponse {
   string security_summary = 9;    // e.g. "Safe", "Mint authority risk", etc.
 }
 
+// Recent indexed trades for one pair plus its 24h stats, from the same
+// index the token list uses — so a token page and its list card agree.
+message GetRecentTradesRequest {
+  int64 chain_id = 1;
+  string pair_address = 2;
+  int32 limit = 3;
+}
+
+message RecentTrade {
+  string tx_hash = 1;
+  string trade_type = 2; // "buy" | "sell"
+  double base_token_amount = 3; // SOL
+  double token_amount = 4;
+  double token_price_usd = 5;
+  double total_usd = 6;
+  string maker = 7;
+  int64 block_time = 8; // unix seconds
+}
+
+message PairStats24h {
+  double last_price_usd = 1;
+  double change_24h = 2; // percent
+  double vol_24h_usd = 3;
+  int64 txs_24h = 4;
+  int64 buys_24h = 5;
+  int64 sells_24h = 6;
+  int64 traders_24h = 7;
+}
+
+message GetRecentTradesResponse {
+  repeated RecentTrade list = 1;
+  PairStats24h stats = 2;
+  double sol_price_usd = 3;
+}
+
 service Market {
   rpc GetPumpTokenList(GetPumpTokenListRequest) returns (GetPumpTokenListResponse);
+  rpc GetRecentTrades(GetRecentTradesRequest) returns (GetRecentTradesResponse);
   rpc GetClmmPoolList(GetClmmPoolListRequest) returns (GetClmmPoolListResponse);
   rpc GetKline(GetKlineRequest) returns (GetKlineResponse);
   rpc GetPairInfoByToken(GetPairInfoByTokenRequest) returns (GetPairInfoByTokenResponse);

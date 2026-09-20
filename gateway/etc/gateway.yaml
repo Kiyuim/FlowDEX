@@ -113,6 +113,9 @@ Upstreams: # upstreams
         Path: /v1/market/get_candlestick
         RpcPath: market.Market/GetKline
       - Method: get
+        Path: /v1/market/recent_trades
+        RpcPath: market.Market/GetRecentTrades
+      - Method: get
         Path: /v1/market/token_security_check
         RpcPath: market.Market/TokenSecurityCheck
       - Method: get
@@ -132,6 +135,7 @@ whitelist:
     - /v1/market/index_pump
     - /v1/market/index_clmm
     - /v1/market/get_candlestick
+    - /v1/market/recent_trades
     - /v1/market/user_tokens
     - /v1/market/user_pools
     - /v1/market/record_user_asset
