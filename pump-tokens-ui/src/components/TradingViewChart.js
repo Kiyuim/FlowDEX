@@ -100,6 +100,22 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
           setClickInfo(null);
           return;
         }
+        // lightweight-charts' click event is time-column-based — it fires for
+        // any click within a candle's time slot, including the blank space
+        // above/below the actual wick. Only show the info card when the click
+        // lands within the rendered high-low pixel range (with a small
+        // tolerance so hitting a thin wick line isn't overly finicky).
+        const highY = candlestickSeriesRef.current.priceToCoordinate(candle.high);
+        const lowY = candlestickSeriesRef.current.priceToCoordinate(candle.low);
+        if (highY == null || lowY == null) {
+          setClickInfo(null);
+          return;
+        }
+        const tolerance = 6;
+        if (param.point.y < highY - tolerance || param.point.y > lowY + tolerance) {
+          setClickInfo(null);
+          return;
+        }
         const series = candleDataRef.current;
         const idx = series.findIndex((c) => c.time === param.time);
         const prevClose = idx > 0 ? series[idx - 1].close : null;
