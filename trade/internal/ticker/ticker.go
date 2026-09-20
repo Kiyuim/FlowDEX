@@ -42,16 +42,21 @@ const (
 	tickInterval = 2 * time.Second
 	// One instance scans at a time; two instances confirming the same buy
 	// would create two double-out sells.
-	lockKey     = "dex:ticker:check_onchain_tx:lock"
-	lockExpire  = 30 // seconds
-	scanBatch   = 20
+	lockKey    = "dex:ticker:check_onchain_tx:lock"
+	lockExpire = 30 // seconds
+	scanBatch  = 20
 	// The devnet consumer trails the chain tip (throttled block fetch), so
 	// don't time orders out aggressively — just stop rescanning stale ones.
 	scanWindow = 24 * time.Hour
 
-	// Past this age the consumer has almost certainly either indexed the block
-	// or dropped it — go ask the chain directly.
-	rpcFallbackAfter = 2 * time.Minute
+	// Past this age, go ask the chain directly instead of waiting for the
+	// consumer to index the block. Client-signed orders arrive here already
+	// confirmed (ConfirmMarketOrder is called after confirmTransaction), so a
+	// long wait is pure dead time before the double-out/trailing sell can be
+	// created; finality lands ~13s after confirmation, and a not-yet-final tx
+	// just retries next tick. Was 2 minutes — users saw the follow-up sell
+	// appear well over a minute after the buy.
+	rpcFallbackAfter = 10 * time.Second
 	// getTransaction calls per tick; keeps worst-case RPC load ~1.5 req/s
 	// (devnet public RPC 429s well below its nominal limits).
 	rpcChecksPerTick = 3
@@ -394,6 +399,14 @@ func (t *TradeTicker) processDoubleOut(ctx context.Context, order *trademodel.Tr
 		order.DoubleOut != 1 ||
 		order.SwapType != int64(trade.SwapType_Buy) {
 		return nil
+	}
+
+	// finalizeOrder receives a row that was backfilled in memory. Reload it
+	// after the CAS/update so the child order is built from the values actually
+	// persisted by the consumer or RPC fallback, even when the ticker raced a
+	// client confirmation or another worker.
+	if persisted, err := trademodel.NewTradeOrderModel(t.svcCtx.DB).FindOne(ctx, order.Id); err == nil {
+		order = persisted
 	}
 
 	sellPrice := order.FinalPriceBase.Mul(two)
