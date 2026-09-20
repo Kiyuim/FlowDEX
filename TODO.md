@@ -1,5 +1,112 @@
 # TODO
 
+## Backend deep-merge with devnet-branch trading features (2026-09-20)
+
+Per explicit direction ("深度整合...主要以功能多的为主也就是devnet"), merged the
+reference's trading logic onto this backend instead of overwriting it —
+keeping this session's own fixes (block-ingestion abort fix, kline window,
+pumpstats/holder-count, CLMM list fixes, solprice, full Portfolio RPC set,
+`pool_address` on `CreatePoolResponse`) while adopting what devnet has that
+this backend lacked. Deployed live (Railway `FlowDEX` service bundles all Go
+services in one container via `start-backend.sh`).
+
+- **Fixed the real "can't buy tokens" bug**: `CreateMarketOrder4Pumpfun` was
+  still building legacy `buy`/`sell` instructions. The currently-deployed
+  pump program rejects legacy `buy` outright (`BuybackFeeRecipientMissing`)
+  and silently drops legacy `sell` fills. Switched to `buy_v2`/`sell_v2`
+  (`pkg/pumpfun/pump`). This affects every pump.fun-sourced token, not just
+  the ones added this round — probably the actual reason trading looked
+  broken across the board.
+- **PumpMeteora trading + indexing**: build/dispatch in
+  `trade/internal/chain/solana/pump_meteora.go` +
+  `pkg/pumpfun/pump/meteora.go`; on-chain create/swap decoding in
+  `consumer/internal/logic/sol/block/pump_meteora*.go`, wired into both the
+  outer and inner instruction dispatchers for both PumpMeteora program
+  builds. New tokens created via the "PumpMeteora"/"PumpMeteora V2" launch
+  targets will now actually get indexed and become tradeable/chartable.
+- **Re-enabled the CLMM (Raydium concentrated liquidity) decoder** in the
+  consumer — it was fully implemented but commented out, so CLMM pool trades
+  were never being indexed at all.
+- **Enabled `SendTokenPrice2TradeRPC`** — this was commented out
+  (`// 推送...用于限价单交易匹配`), meaning the price feed limit orders and
+  trailing stops need to ever trigger was never running. Limit orders and
+  trailing stops were wired up but silently inert; should now actually fire.
+- **Trailing stop implemented**: `createtrailingstoplogic.go` was a stub
+  (`// todo: add your logic here`) — now a real implementation with a
+  nominal-SOL-price fallback for devnet's zero `base_token_price`.
+- **Auto-slippage + double-out + trailing-stop-attached buys**: added to
+  `trade.proto` (`is_auto_slippage`, `trailing_percent`, `double_out`) and
+  `createmarketorderlogic.go`/`createlimitorderlogic.go`.
+- **New ticker** (`trade/internal/ticker`) confirms on-chain fills against
+  the consumer's indexed trade tables (falling back to direct RPC lookup for
+  fills the consumer missed) and auto-creates the double-out sell / attached
+  trailing stop once a buy confirms.
+- **Action needed — server wallet for custodial orders**: limit orders,
+  trailing stops, and double-out sells are executed by a server-held key
+  (`PRIVATE_KEY` env var, base64 ed25519), since the user isn't present to
+  sign a triggered order. Generated a fresh **devnet-only** keypair
+  (`8TxSw6R2k9rhLQwPD1rBqgQca2iWXyJL7gpMSE3b751u`) — set it on Railway
+  (`FlowDEX` service → Variables → `PRIVATE_KEY` = the base64 value handed to
+  you in-conversation; this is a secret-store write, so it needed your own
+  action rather than mine). It also needs a small amount of devnet SOL to
+  pay fees — both public devnet faucets (Solana's and Helius's) were
+  rate-limited when I tried; fund it once they reset, or send it some
+  devnet SOL directly from your own wallet.
+- Removed the dead Token-2022 toggle from `TokenCreation.js` — the checkbox
+  did nothing (`createToken` always used `TOKEN_PROGRAM_ID` regardless).
+
+## Frontend/backend data-shape fixes (2026-09-20)
+
+- **Add Liquidity pool selector was silently broken**: `AddLiquidityHeader.js`
+  read snake_case fields (`pool_state`, `token0_symbol`, `token0_mint`) but
+  the live API returns camelCase (`poolState`, `inputTokenSymbol`,
+  `inputVaultMint`) — every field came back `undefined`, so selecting a pool
+  never populated `poolInfo` and the whole form below (price range, amounts,
+  submit button) never rendered. Fixed the field mapping.
+- **Token Source filters always showed 0** for every specific source
+  (Pump.fun/PumpMeteora/PumpMeteora V2), even though "All Sources" showed
+  tokens: it classified tokens by deriving a bonding-curve PDA client-side
+  and matching `pairAddress` — which can never match this project's
+  fabricated seed-data addresses (confirmed one isn't even a valid-format
+  Solana address). The backend already tags each token's real trading source
+  via `pair.Name` (set by the consumer's per-program decoder — "PumpFun"/
+  "PumpMeteora"/"PumpMeteoraV2"), but `market`'s `GetPumpTokenList` was
+  exposing `token.Program` under this field instead, which is actually the
+  *SPL token program* (Token/Token-2022) the mint uses — a different axis
+  entirely, that only coincidentally looked right on old seed data. Fixed
+  the backend to expose `pair.Name`, and the frontend to prefer it (PDA
+  derivation kept only as a fallback).
+- **Candle chart wrongly gated on on-chain trades**: `TokenDetail.js` only
+  mounted `TradingViewChart` when the *on-chain* trades hook had data — but
+  that chart component fetches candles from **our own backend**
+  (`/v1/market/get_candlestick`), independent of on-chain state. The gate
+  was hiding a chart that renders fine on backend data alone. Now always
+  mounts when a token is present.
+- **Kline chart stuck at ~1 day of history — again**: `TradingViewChart.js`
+  had regressed back to a hardcoded 24h lookback window (this exact bug was
+  fixed earlier this session; the fix was lost when the frontend got
+  wholesale-replaced with the reference). Re-fixed to scale the window with
+  the selected interval.
+- **Candlestick click-to-inspect — restored**: the frontend replacement also
+  silently dropped this (GMGN-style O/H/L/C/%-change popup on click),
+  re-added to the reference's own `TradingViewChart.js`.
+
+### Still not addressed this round
+- **Old seeded demo tokens (CHAD, PEPESOL, FROG, etc.) have no real on-chain
+  presence** — their addresses are fabricated, not real Solana accounts, so
+  they can never chart real on-chain trades or actually execute a buy/sell
+  under the new architecture (which reads bonding-curve reserves/trades
+  live from chain for the trade panel, though the candle chart itself is
+  backend-fed and works fine for them). You asked to delete these and
+  create real replacements with 10+ days of candle history — not done yet,
+  planned next: create real tokens on-chain (PumpMeteora, now that trading
+  actually works), then backfill historical trade/kline rows under their
+  *real* addresses the same way the original seed data was generated.
+- Redundant-file cleanup (`以及查看是否有冗余文件可以删除`) — not yet done;
+  revisit once the data-recreation plan above lands, since the frontend
+  swap may have reintroduced files worth re-checking (`MockTokenWebSocket.js`,
+  `MockTradingViewTest.js`, `Header.js`) for actual usage before deleting.
+
 ## Frontend replaced with the reference implementation (2026-09-20)
 
 Swapped `pump-tokens-ui`'s entire `src/` for the more complete reference
