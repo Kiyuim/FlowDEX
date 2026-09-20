@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
 import { useConnection } from '@solana/wallet-adapter-react';
 import TradingViewChart from '../components/TradingViewChart';
@@ -41,8 +41,8 @@ export default function TokenDetail() {
   const [loading, setLoading] = useState(!location.state?.token);
   // The candle chart (TradingViewChart) is the only price chart. `trades` (raw
   // on-chain trades) still feeds the stats and the RecentTrades list below.
-  const { trades, status: tradesStatus } = useBondingCurveTrades(mint);
-  const { reserves, status: reservesStatus } = useBondingCurveReserves(mint);
+  const { trades, status: tradesStatus, reload: reloadTrades } = useBondingCurveTrades(mint);
+  const { reserves, status: reservesStatus, reload: reloadReserves } = useBondingCurveReserves(mint);
   const { isFav, toggle } = useWatchlist();
   const [ordersTick, setOrdersTick] = useState(0);
 
@@ -51,17 +51,25 @@ export default function TokenDetail() {
   // before it has any trades to compute stats from.
   const { connection } = useConnection();
   const [curveState, setCurveState] = useState(null);
+  const reloadCurveState = useCallback(() => {
+    if (!mint) return;
+    readCurveState(connection, mint).then(setCurveState).catch(() => {});
+  }, [mint, connection]);
   useEffect(() => {
     if (!mint) return undefined;
-    let alive = true;
-    const load = () =>
-      readCurveState(connection, mint)
-        .then((s) => { if (alive) setCurveState(s); })
-        .catch(() => {});
-    load();
-    const id = setInterval(load, 15000);
-    return () => { alive = false; clearInterval(id); };
-  }, [mint, connection]);
+    reloadCurveState();
+    const id = setInterval(reloadCurveState, 15000);
+    return () => clearInterval(id);
+  }, [mint, reloadCurveState]);
+
+  // Pool reserves/recent-trades/price all poll on their own interval —
+  // without an explicit kick, the page just looks unchanged right after a
+  // trade until the next scheduled poll happens to land.
+  const handleTradeComplete = useCallback(() => {
+    reloadCurveState();
+    reloadReserves();
+    reloadTrades();
+  }, [reloadCurveState, reloadReserves, reloadTrades]);
 
   // Real stats computed from on-chain trades (backend metadata is often stale/0).
   const stats = useMemo(() => {
@@ -275,6 +283,7 @@ export default function TokenDetail() {
                 token={token}
                 currentPriceUsd={stats?.price ?? reserves?.priceUsd ?? 0}
                 onLimitOrderPlaced={() => setOrdersTick((t) => t + 1)}
+                onTradeComplete={handleTradeComplete}
               />
               <OpenOrders
                 mint={mint}

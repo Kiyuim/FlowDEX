@@ -15,7 +15,7 @@ const SELL_PRESETS = [25, 50, 75, 100];
 const LIMIT_PCT_PRESETS = [-10, -5, 5, 10];
 const TRAIL_PRESETS = [10, 20, 30, 50];
 
-export default function TradePanel({ token, currentPriceUsd, onLimitOrderPlaced }) {
+export default function TradePanel({ token, currentPriceUsd, onLimitOrderPlaced, onTradeComplete }) {
   const { connection } = useConnection();
   const { publicKey, connected, signTransaction, sendTransaction } = useWallet();
   const [side, setSide] = useState('buy');
@@ -164,6 +164,10 @@ export default function TradePanel({ token, currentPriceUsd, onLimitOrderPlaced 
         onLimitOrderPlaced?.(); // the order (and later its auto sell) shows in the orders panel
       }
       setTimeout(refreshBalances, 2500);
+      // Pool reserves/recent-trades/price all poll on their own interval
+      // (15-20s) — without this, the page just looks unchanged right after
+      // a trade until the next scheduled poll happens to land.
+      setTimeout(() => onTradeComplete?.(), 2500);
     } catch (e) {
       toast.error(`${side === 'buy' ? 'Buy' : 'Sell'} failed: ${e.message || e}`, { id: t });
     } finally {
@@ -338,7 +342,7 @@ export default function TradePanel({ token, currentPriceUsd, onLimitOrderPlaced 
                 key={p}
                 onClick={() => {
                   setSellPct(p);
-                  setAmount('');
+                  setAmount(String((balance * p) / 100));
                 }}
                 className={`rounded-md border px-2.5 py-1 text-xs ${
                   sellPct === p
