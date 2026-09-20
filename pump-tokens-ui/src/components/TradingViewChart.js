@@ -805,7 +805,7 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
       fetchKlineData(interval);
       // WebSocket is the low-latency path; keep a 15s polling safety net so
       // a dropped Redis subscription never leaves the chart visibly stale.
-      const timer = window.setInterval(() => fetchKlineData(interval, true), 15000);
+      const timer = window.setInterval(() => fetchKlineData(interval, true), 5000);
       return () => { window.clearInterval(timer); ++fetchGeneration.current; pendingFetch.current?.abort(); pendingFetch.current = null; };
     }
   }, [token?.pairAddress, interval, visible, refreshKey]);

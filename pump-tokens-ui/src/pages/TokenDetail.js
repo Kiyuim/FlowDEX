@@ -6,6 +6,7 @@ import RecentTrades from '../components/RecentTrades';
 import TradePanel from '../components/TradePanel';
 import OpenOrders from '../components/OpenOrders';
 import useBondingCurveTrades from '../hooks/useBondingCurveTrades';
+import useIndexedTrades from '../hooks/useIndexedTrades';
 import useBondingCurveReserves from '../hooks/useBondingCurveReserves';
 import useWatchlist from '../hooks/useWatchlist';
 import { shortAddr } from '../lib/trade';
@@ -81,7 +82,10 @@ export default function TokenDetail() {
   });
   // The candle chart (TradingViewChart) is the only price chart. `trades` (raw
   // on-chain trades) still feeds the stats and the RecentTrades list below.
-  const { trades, status: tradesStatus, reload: reloadTrades } = useBondingCurveTrades(mint);
+  // On-chain trades are the fallback for a pair the indexer hasn't recorded
+  // yet; once the backend has it, the index is the single source for the
+  // list, the stats and the chart (same numbers as the token list card).
+  const { trades: chainTrades, status: chainTradesStatus, reload: reloadTrades } = useBondingCurveTrades(mint);
   const { reserves, status: reservesStatus, reload: reloadReserves } = useBondingCurveReserves(mint);
   const { isFav, toggle } = useWatchlist();
   const [ordersTick, setOrdersTick] = useState(0);
@@ -111,15 +115,24 @@ export default function TokenDetail() {
   // Pool reserves/recent-trades/price all poll on their own interval —
   // without an explicit kick, the page just looks unchanged right after a
   // trade until the next scheduled poll happens to land.
+  const indexedPair = (curveState?.mint === mint ? curveState.pairAddress : null)
+    || (token?.pairAddress && token.pairAddress !== mint ? token.pairAddress : null);
+  const { trades: indexedTrades, stats: indexedStats, status: indexedStatus, reload: reloadIndexed } = useIndexedTrades(indexedPair);
+  const useIndex = indexedStatus === 'ok';
+  const trades = useIndex ? indexedTrades : chainTrades;
+  const tradesStatus = useIndex ? 'ok' : (indexedStatus === 'loading' && chainTradesStatus !== 'ok' ? 'loading' : chainTradesStatus);
+
   const handleTradeComplete = useCallback(() => {
     setChartRefresh((n) => n + 1);
     reloadCurveState();
     reloadReserves();
+    reloadIndexed();
     reloadTrades();
-  }, [reloadCurveState, reloadReserves, reloadTrades]);
+  }, [reloadCurveState, reloadReserves, reloadTrades, reloadIndexed]);
 
   // Real stats computed from on-chain trades (backend metadata is often stale/0).
   const stats = useMemo(() => {
+    if (useIndex && indexedStats) return indexedStats;
     if (!trades.length) return null;
     const now = Date.now() / 1000;
     const cutoff = now - 86400;
@@ -133,7 +146,7 @@ export default function TokenDetail() {
     let ref = older.length ? older[0].priceUsd : (recent.length > 1 ? recent[recent.length - 1]?.priceUsd : initialPrice);
     const change = ref && ref > 0 ? ((price - ref) / ref) * 100 : null;
     return { price, vol24h, txns24h: recent.length, buys24h, sells24h: recent.length - buys24h, traders, change };
-  }, [trades, curveState]);
+  }, [trades, curveState, useIndex, indexedStats]);
 
   const money = (v) => {
     if (v == null) return '—';
@@ -248,7 +261,6 @@ export default function TokenDetail() {
           <div className="rounded-xl border border-border bg-bg-card p-2 shadow-card">
             <TradingViewChart
               token={chartToken}
-              liveTrades={trades}
               refreshKey={chartRefresh}
               onCandleStats={handleCandleStats}
               visible
