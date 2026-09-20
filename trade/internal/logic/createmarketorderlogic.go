@@ -94,7 +94,6 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.CreateMarketOrderRe
 	})
 	fmt.Println("*********************2222***************")
 	if err != nil {
-		fmt.Println("PROBE_DEBUG_FALLBACK_ENTERED: err =", err, "SolTxMananger nil?", l.svcCtx.SolTxMananger == nil, "Client nil?", l.svcCtx.SolTxMananger != nil && l.svcCtx.SolTxMananger.Client == nil)
 		// Not indexed yet (e.g. a token just created — the consumer hasn't
 		// caught its creation block, or hasn't caught up at all). The swap
 		// itself is always built from live on-chain pool state regardless of
@@ -102,9 +101,7 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.CreateMarketOrderRe
 		// by probing on-chain directly instead of failing every buy/sell for
 		// a fresh token until it happens to get indexed.
 		if l.svcCtx.SolTxMananger != nil && l.svcCtx.SolTxMananger.Client != nil {
-			fmt.Println("PROBE_DEBUG_CALLING_DETECT for", in.TokenCa)
 			source, curveAddr, detectErr := chainsolana.DetectTokenSource(l.ctx, l.svcCtx.SolTxMananger.Client, in.TokenCa)
-			fmt.Println("PROBE_DEBUG_DETECT_RETURNED source=", source, "curveAddr=", curveAddr, "detectErr=", detectErr)
 			if detectErr == nil {
 				l.Infof("GetPairInfoByToken miss for %s, recovered via on-chain probe: source=%s pair=%s", in.TokenCa, source, curveAddr)
 				pairInfo = &marketclient.GetPairInfoByTokenResponse{

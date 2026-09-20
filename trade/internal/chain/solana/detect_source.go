@@ -3,12 +3,30 @@ package solana
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"dex/pkg/constants"
 
 	aSDK "github.com/gagliardetto/solana-go"
 	ag_rpc "github.com/gagliardetto/solana-go/rpc"
 )
+
+// getAccountInfoWithRetry retries transient RPC failures (devnet is slow and
+// rate-limits aggressively — a single miss shouldn't rule out a real account).
+func getAccountInfoWithRetry(ctx context.Context, client *ag_rpc.Client, addr aSDK.PublicKey, attempts int) (*ag_rpc.GetAccountInfoResult, error) {
+	var lastErr error
+	for i := 0; i < attempts; i++ {
+		info, err := client.GetAccountInfo(ctx, addr)
+		if err == nil {
+			return info, nil
+		}
+		lastErr = err
+		if i < attempts-1 {
+			time.Sleep(time.Duration(300*(i+1)) * time.Millisecond)
+		}
+	}
+	return nil, lastErr
+}
 
 // DetectTokenSource probes on-chain for which bonding-curve program a mint
 // belongs to. Used as a fallback for a token the consumer hasn't indexed into
@@ -44,8 +62,7 @@ func DetectTokenSource(ctx context.Context, client *ag_rpc.Client, mint string) 
 		if err != nil {
 			continue
 		}
-		info, getErr := client.GetAccountInfo(ctx, curve)
-		fmt.Println("PROBE_DEBUG_CANDIDATE", c.source, "program=", c.program, "curve=", curve.String(), "getErr=", getErr, "info nil?", info == nil)
+		info, getErr := getAccountInfoWithRetry(ctx, client, curve, 3)
 		if getErr == nil && info != nil && info.Value != nil {
 			return c.source, curve.String(), nil
 		}
