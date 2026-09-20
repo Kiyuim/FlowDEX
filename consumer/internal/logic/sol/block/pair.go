@@ -179,6 +179,16 @@ func (s *BlockService) SavePair(ctx context.Context, trade *types.TradeWithPair,
 	case err == nil:
 		fmt.Println("准备插入信息中66666666666666")
 		// 已存在，更新关键信息
+		// Name/TokenSymbol are only ever set at insert time otherwise — if the
+		// original insert happened before a decoder/source-tagging fix landed
+		// (or before token metadata was indexed), the row stays wrong forever.
+		// Self-heal both from the current trade on every update instead.
+		if trade.SwapName != "" {
+			pairAtDB.Name = trade.SwapName
+		}
+		if tokenSymbol != "" {
+			pairAtDB.TokenSymbol = tokenSymbol
+		}
 		pairAtDB.CurrentBaseTokenAmount = trade.CurrentBaseTokenInPoolAmount
 		pairAtDB.CurrentTokenAmount = trade.CurrentTokenInPoolAmount
 		pairAtDB.Fdv = liq
