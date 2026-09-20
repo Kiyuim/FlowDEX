@@ -303,7 +303,8 @@ const PoolCreation = () => {
           
           console.log('🔏 Sending transaction to wallet for signing...');
           console.time('Transaction Signing');
-          
+
+          let signature;
           try {
             // Use wallet-adapter's own sendTransaction rather than manually
             // signing + re-serializing + sendRawTransaction: that round-trip
@@ -312,7 +313,7 @@ const PoolCreation = () => {
             // some wallets. sendTransaction lets the wallet extension use its
             // own atomic signAndSendTransaction where available.
             console.log('Sending transaction via wallet-adapter...');
-            const signature = await sendTransaction(transaction, connection, sendOptions);
+            signature = await sendTransaction(transaction, connection, sendOptions);
             console.log('🚀 Transaction sent:', signature);
             setTxSignature(signature);
           } catch (signError) {
@@ -342,11 +343,11 @@ const PoolCreation = () => {
           console.log('Waiting for confirmation...');
           console.time('Transaction Confirmation');
           // Wait for confirmation (optional)
-          const confirmation = await connection.confirmTransaction(txSignature);
+          const confirmation = await connection.confirmTransaction(signature);
           console.timeEnd('Transaction Confirmation');
           console.log('✅ Transaction confirmed:', confirmation);
-          
-          setSuccess(`🎉 Pool created successfully! Transaction: ${txSignature}`);
+
+          setSuccess(`🎉 Pool created successfully! Transaction: ${signature}`);
           if (poolAddress) {
             recordUserAsset({
               wallet_address: publicKey.toString(),

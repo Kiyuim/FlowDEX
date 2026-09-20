@@ -94,6 +94,29 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.CreateMarketOrderRe
 	})
 	fmt.Println("*********************2222***************")
 	if err != nil {
+		// Not indexed yet (e.g. a token just created — the consumer hasn't
+		// caught its creation block, or hasn't caught up at all). The swap
+		// itself is always built from live on-chain pool state regardless of
+		// DB state, so recover just enough metadata (source, curve address)
+		// by probing on-chain directly instead of failing every buy/sell for
+		// a fresh token until it happens to get indexed.
+		if l.svcCtx.SolTxMananger != nil && l.svcCtx.SolTxMananger.Client != nil {
+			source, curveAddr, detectErr := chainsolana.DetectTokenSource(l.ctx, l.svcCtx.SolTxMananger.Client, in.TokenCa)
+			if detectErr == nil {
+				l.Infof("GetPairInfoByToken miss for %s, recovered via on-chain probe: source=%s pair=%s", in.TokenCa, source, curveAddr)
+				pairInfo = &marketclient.GetPairInfoByTokenResponse{
+					Address:      curveAddr,
+					Name:         source,
+					ChainId:      int64(in.ChainId),
+					TokenAddress: in.TokenCa,
+				}
+				err = nil
+			} else {
+				l.Errorf("GetPairInfoByToken miss for %s, on-chain probe also failed: %v", in.TokenCa, detectErr)
+			}
+		}
+	}
+	if err != nil {
 		fmt.Println("GetPairInfoByToken err is", err)
 
 		return nil, fmt.Errorf("err is %s", err)
@@ -242,6 +265,23 @@ func (l *CreateMarketOrderLogic) CreateMarketTx(order *trademodel.TradeOrder, pa
 			ChainId:      order.ChainId,
 			TokenAddress: order.TokenCa,
 		})
+		if err != nil {
+			// Same on-chain fallback as CreateMarketOrder: not indexed yet
+			// doesn't mean untradeable, the swap is built from live pool state.
+			if l.svcCtx.SolTxMananger != nil && l.svcCtx.SolTxMananger.Client != nil {
+				source, curveAddr, detectErr := chainsolana.DetectTokenSource(l.ctx, l.svcCtx.SolTxMananger.Client, order.TokenCa)
+				if detectErr == nil {
+					l.Infof("CreateMarketTx: GetPairInfoByToken miss for %s, recovered via on-chain probe: source=%s pair=%s", order.TokenCa, source, curveAddr)
+					pairInfo = &marketclient.GetPairInfoByTokenResponse{
+						Address:      curveAddr,
+						Name:         source,
+						ChainId:      order.ChainId,
+						TokenAddress: order.TokenCa,
+					}
+					err = nil
+				}
+			}
+		}
 		if err != nil {
 			l.Errorf("CreateMarketTxOkx GetPairInfoByToken failed token:%s, err:%v", order.TokenCa, err)
 			return "", err
