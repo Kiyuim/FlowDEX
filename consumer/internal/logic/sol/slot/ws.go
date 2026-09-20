@@ -90,8 +90,28 @@ func (s *SlotService) ReadSlotMessage() {
 		return
 	}
 
-	s.maxSlot = resp.Params.Result.Slot
-	s.realtimeCh <- resp.Params.Result.Slot
+	slot := resp.Params.Result.Slot
+	// slotSubscribe is not gap-free: notifications are skipped by the node
+	// and lost across reconnects. Measured: 921 of 5,000 slots (18%) never
+	// entered the pipeline, i.e. every trade in them was missed. Enqueue every
+	// slot between the last one we handed out and this one (capped, so a long
+	// reconnect doesn't flood the queue — the retry loop covers the rest).
+	const maxGap = 300
+	if s.lastQueuedSlot != 0 && slot > s.lastQueuedSlot+1 {
+		from := s.lastQueuedSlot + 1
+		if slot-from > maxGap {
+			s.Errorf("SlotWs: gap of %d slots (%d..%d), backfilling last %d only", slot-from, from, slot-1, maxGap)
+			from = slot - maxGap
+		}
+		for missed := from; missed < slot; missed++ {
+			s.realtimeCh <- missed
+		}
+	}
+	if slot > s.lastQueuedSlot {
+		s.lastQueuedSlot = slot
+	}
+	s.maxSlot = slot
+	s.realtimeCh <- slot
 }
 
 func (s *SlotService) MustConnect() {

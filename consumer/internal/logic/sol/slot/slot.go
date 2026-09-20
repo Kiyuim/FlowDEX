@@ -27,9 +27,10 @@ type SlotService struct {
 	errorCh        chan uint64   // 失败重试 Slot 队列
 	realtimeCh     chan uint64   // 增量 Slot 队列
 
-	ctx     context.Context
-	cancel  func(err error)
-	maxSlot uint64
+	ctx            context.Context
+	cancel         func(err error)
+	maxSlot        uint64
+	lastQueuedSlot uint64 // highest slot handed to the workers; gaps below it are filled
 }
 
 func NewSlotService(sc *svc.ServiceContext, slotChan chan uint64, historyChan chan uint64) *SlotService {
