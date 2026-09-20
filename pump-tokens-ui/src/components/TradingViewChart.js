@@ -671,11 +671,15 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
 
   // Fetch kline data
   const fetchKlineData = async (selectedInterval = interval, background = false) => {
-    if (background && pendingFetch.current) return;
+    // Never skip a poll because an older request is still "pending": one
+    // hung response would then suppress every later poll and freeze the
+    // chart at its last load. Abort the stale request and go again; the
+    // generation check below discards whatever the old one returns.
     const generation = ++fetchGeneration.current;
     pendingFetch.current?.abort();
     const controller = new AbortController();
     pendingFetch.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
     if (!token?.pairAddress || !candlestickSeriesRef.current) {
       console.warn('Cannot fetch kline data:', { 
         hasPairAddress: !!token?.pairAddress,
@@ -684,6 +688,7 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
         token 
       });
       pendingFetch.current = null;
+      window.clearTimeout(timeout);
       return;
     }
 
@@ -794,6 +799,7 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
       }
       setError('Failed to load chart data: ' + error.message);
     } finally {
+      window.clearTimeout(timeout);
       if (generation === fetchGeneration.current) { pendingFetch.current = null; setIsLoading(false); }
     }
   };

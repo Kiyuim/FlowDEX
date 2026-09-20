@@ -307,7 +307,7 @@ export default function TokenDetail() {
             <div className="mb-2 flex items-center justify-between">
               <span className="text-xs uppercase tracking-wide text-muted">Pool reserves</span>
               {reservesStatus === 'loading' && <span className="text-[11px] text-muted">loading…</span>}
-              {reservesStatus === 'error' && <span className="text-[11px] text-down">unavailable</span>}
+              {reservesStatus === 'error' && !poolRes && <span className="text-[11px] text-down">unavailable</span>}
               {poolRes?.complete && (
                 <span className="rounded bg-up/10 px-1.5 py-0.5 text-[11px] text-up">migrated</span>
               )}
