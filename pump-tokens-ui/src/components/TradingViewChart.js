@@ -33,6 +33,41 @@ function chartTimeToDate(time) {
   return new Date(NaN);
 }
 
+function mergeLiveTradeCandles(base, trades, interval) {
+  const intervalSeconds = {
+    '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400,
+  }[interval] || 3600;
+  const merged = base.slice();
+  const grouped = new Map();
+  for (const trade of trades || []) {
+    const time = Number(trade.time);
+    const price = Number(trade.priceUsd);
+    if (!Number.isFinite(time) || time <= 0 || !Number.isFinite(price) || price <= 0) continue;
+    const bucket = Math.floor(time / intervalSeconds) * intervalSeconds;
+    const row = grouped.get(bucket) || { time: bucket, open: price, high: price, low: price, close: price, first: time, last: time };
+    if (time < row.first) { row.first = time; row.open = price; }
+    if (time > row.last) { row.last = time; row.close = price; }
+    row.high = Math.max(row.high, price);
+    row.low = Math.min(row.low, price);
+    grouped.set(bucket, row);
+  }
+  for (const [bucket, incoming] of grouped) {
+    const idx = merged.findIndex((c) => c.time === bucket);
+    if (idx < 0) merged.push(incoming);
+    else {
+      const current = merged[idx];
+      merged[idx] = {
+        ...current,
+        open: current.open > 0 ? current.open : incoming.open,
+        high: Math.max(current.high, incoming.high),
+        low: Math.min(current.low, incoming.low),
+        close: incoming.close,
+      };
+    }
+  }
+  return merged.sort((a, b) => a.time - b.time);
+}
+
 const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = false, refreshKey = 0 }) => {
   const chartContainerRef = useRef();
   const chartRef = useRef();
@@ -46,46 +81,15 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
   const mockIntervalRef = useRef(null);
   const candleDataRef = useRef([]); // full series, kept in time order, for prev-close lookup
   const [clickInfo, setClickInfo] = useState(null); // { x, y, candle, prevClose }
+  const liveTradesRef = useRef(liveTrades);
 
   // The direct on-chain trade hook can be newer than the Railway indexer. Fold
   // those trades into the current candle so the chart does not wait for the
   // consumer to catch up before showing the last few minutes.
   useEffect(() => {
     if (!candlestickSeriesRef.current || !liveTrades?.length) return;
-    const intervalSeconds = {
-      '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400,
-    }[interval] || 3600;
-    const grouped = new Map();
-    for (const trade of liveTrades) {
-      const time = Number(trade.time);
-      const price = Number(trade.priceUsd);
-      if (!Number.isFinite(time) || time <= 0 || !Number.isFinite(price) || price <= 0) continue;
-      const bucket = Math.floor(time / intervalSeconds) * intervalSeconds;
-      const row = grouped.get(bucket) || { time: bucket, open: price, high: price, low: price, close: price, first: time, last: time };
-      if (time < row.first) { row.first = time; row.open = price; }
-      if (time > row.last) { row.last = time; row.close = price; }
-      row.high = Math.max(row.high, price);
-      row.low = Math.min(row.low, price);
-      grouped.set(bucket, row);
-    }
-    if (!grouped.size) return;
-
-    const merged = candleDataRef.current.slice();
-    for (const [bucket, incoming] of grouped) {
-      const idx = merged.findIndex((c) => c.time === bucket);
-      if (idx < 0) merged.push(incoming);
-      else {
-        const current = merged[idx];
-        merged[idx] = {
-          ...current,
-          open: current.open > 0 ? current.open : incoming.open,
-          high: Math.max(current.high, incoming.high),
-          low: Math.min(current.low, incoming.low),
-          close: incoming.close,
-        };
-      }
-    }
-    merged.sort((a, b) => a.time - b.time);
+    liveTradesRef.current = liveTrades;
+    const merged = mergeLiveTradeCandles(candleDataRef.current, liveTrades, interval);
     candleDataRef.current = merged;
     try {
       candlestickSeriesRef.current.setData(merged);
@@ -613,12 +617,13 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
       console.log('Transformed chart data:', chartData);
 
       if (chartData.length > 0) {
-        candlestickSeriesRef.current.setData(chartData);
-        candleDataRef.current = chartData.slice();
+        const mergedChartData = mergeLiveTradeCandles(chartData, liveTradesRef.current, selectedInterval);
+        candlestickSeriesRef.current.setData(mergedChartData);
+        candleDataRef.current = mergedChartData;
         
         // Add real-time connection status indicator
-        const lastDataPoint = chartData[chartData.length - 1];
-        console.log('Chart updated with', chartData.length, 'data points');
+        const lastDataPoint = mergedChartData[mergedChartData.length - 1];
+        console.log('Chart updated with', mergedChartData.length, 'data points');
         console.log('Latest data point:', lastDataPoint);
         console.log('WebSocket status:', wsConnection?.readyState === WebSocket.OPEN ? 'Connected' : 'Disconnected');
       } else {
