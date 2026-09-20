@@ -190,13 +190,22 @@ func (s *BlockService) ProcessBlock(ctx context.Context, slot int64) {
 		}
 		trade, err := DecodeTx(ctx, s.sc, decodeTx)
 		if err != nil {
-			s.Errorf("processBlock:%v decodeTx err:%v, tx:%v", slot, err, decodeTx.TxHash)
+			// Vote transactions and instructions from programs we don't index
+			// are the overwhelming majority of on-chain traffic and are
+			// expected, not failures — logging each one at ERROR level was
+			// flooding Railway's log pipeline badly enough that it started
+			// silently dropping messages from every service, not just this
+			// one. Only genuinely unexpected decode failures get logged here.
+			if !errors.Is(err, ErrLikelyVoteTx) && !errors.Is(err, ErrUnknownProgram) &&
+				!errors.Is(err, ErrTokenAmountIsZero) && !errors.Is(err, ErrNotSupportWarp) &&
+				!errors.Is(err, ErrNotSupportInstruction) {
+				s.Errorf("processBlock:%v decodeTx err:%v, tx:%v", slot, err, decodeTx.TxHash)
+			}
 			return
 		}
 
 		trade = slice.Filter(trade, func(_ int, item *types.TradeWithPair) bool {
 			if item == nil {
-				fmt.Println("222222222222******222222222222222")
 				return false
 			}
 			s.FillTradeWithPairInfo(item, slot)
@@ -204,7 +213,6 @@ func (s *BlockService) ProcessBlock(ctx context.Context, slot int64) {
 		})
 
 		trades = append(trades, trade...)
-		fmt.Println("1111the length of trades is:", len(trades))
 	})
 
 	tradeMap := make(map[string][]*types.TradeWithPair)
@@ -611,11 +619,10 @@ func DecodeTx(ctx context.Context, sc *svc.ServiceContext, dtx *DecodedTx) (trad
 		return
 	}
 
-	fmt.Println("tx.Meta.LogMessages", tx.Meta.LogMessages)
 	dtx.InnerInstructionMap = GetInnerInstructionMap(tx)
 
 	if len(tx.Meta.LogMessages) == 0 {
-		return nil, fmt.Errorf("decode tx maybe vote tx, tx hash: %v", dtx.TxHash)
+		return nil, fmt.Errorf("%w, tx hash: %v", ErrLikelyVoteTx, dtx.TxHash)
 	}
 
 	// instructions
