@@ -277,7 +277,7 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
           },
         },
         width: chartContainerRef.current.clientWidth,
-        height: 400,
+        height: chartContainerRef.current.clientHeight || 400,
       });
 
       console.log('Chart created successfully:', chart);
@@ -341,14 +341,20 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
         if (chartContainerRef.current) {
           chart.applyOptions({
             width: chartContainerRef.current.clientWidth,
+            height: chartContainerRef.current.clientHeight || 400,
           });
         }
       };
 
       window.addEventListener('resize', handleResize);
+      const resizeObserver = typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(handleResize)
+        : null;
+      resizeObserver?.observe(chartContainerRef.current);
 
       return () => {
         window.removeEventListener('resize', handleResize);
+        resizeObserver?.disconnect();
         chart.remove();
         chartRef.current = null;
         candlestickSeriesRef.current = null;

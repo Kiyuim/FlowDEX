@@ -23,9 +23,11 @@ function parseMeteoraCurve(data) {
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const virtualSol = u64(dv, 80) / 1e9;
   const virtualToken = u64(dv, 88) / 1e6;
+  const tokenTotalSupply = u64(dv, 72) / 1e6;
   return {
     virtualSol,
     virtualToken,
+    tokenTotalSupply,
     realSol: u64(dv, 104) / 1e9,
     realToken: u64(dv, 112) / 1e6,
     complete: data[120] === 1,

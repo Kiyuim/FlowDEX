@@ -593,3 +593,23 @@ The variables were then included in the Ready production build. (Confirmed
 `websocket-production-4109.up.railway.app` is the
 live public domain for the `websocket` Railway service via `railway
 status --json`.)
+
+## Frontend quote and chart consistency follow-up (2026-09-20)
+
+- Fixed the detail page fallback that combined a live price with the old
+  indexed `change24` value (for example `$3.16e-6` beside `+12%`). A live quote
+  now clears the stale percentage until a live reference is available.
+- Detail-page market cap and bonding-curve progress are now derived from the
+  on-chain curve account (including total supply and source-specific reserve
+  thresholds), instead of waiting for stale pair metadata.
+- Direct trade history now probes all supported curve PDAs for a decodable swap
+  event before selecting a source. This prevents PumpMeteora tokens from
+  incorrectly selecting the Pump.fun PDA and showing `Recent trades —
+  Unavailable`.
+- Helius RPC/WebSocket is used when `REACT_APP_HELIUS_API_KEY` is present;
+  logs subscriptions reconnect automatically after a dropped socket. Keep the
+  key in Vercel Production environment variables and redeploy after changing
+  it.
+- Removed the fixed-height wrapper around the chart and made the chart resize
+  from its actual container. This prevents the chart from shifting below its
+  card when the header/stat rows change height.

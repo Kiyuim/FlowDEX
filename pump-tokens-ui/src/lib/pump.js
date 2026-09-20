@@ -39,12 +39,14 @@ export function parseBondingCurve(data) {
   const vSol = u64(v, 16);
   const rToken = u64(v, 24);
   const rSol = u64(v, 32);
+  const totalSupply = u64(v, 40);
   const complete = data[48] === 1;
   return {
     virtualToken: vToken / 10 ** TOKEN_DECIMALS,
     virtualSol: vSol / 1e9,
     realToken: rToken / 10 ** TOKEN_DECIMALS,
     realSol: rSol / 1e9,
+    tokenTotalSupply: totalSupply / 10 ** TOKEN_DECIMALS,
     complete,
     priceUsd: vToken ? (vSol / 1e9 / (vToken / 10 ** TOKEN_DECIMALS)) * getSolUsd() : 0,
   };

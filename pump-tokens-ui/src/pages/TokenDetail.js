@@ -145,10 +145,31 @@ export default function TokenDetail() {
   // Real-time price, volume, change, and market cap updated from on-chain trades, candle stream, or curve
   const displayPrice = stats?.price ?? candleStats?.price ?? (curveState?.mint === mint ? curveState.priceUsd : null) ?? finiteNumber(token?.price) ?? null;
   const displayVolume = stats?.vol24h ?? candleStats?.volume ?? finiteNumber(token?.vol24h);
-  const displayChange = stats?.change ?? candleStats?.change ?? finiteNumber(token?.change24);
-  const displayMktCap = displayPrice != null ? displayPrice * (finiteNumber(token?.totalSupply) || 1e9) : finiteNumber(token?.mktCap);
+  // Once a live quote exists, never pair it with the old indexed percentage.
+  // That combination was the visible "$3.16e-6 / +12%" mismatch. If the
+  // direct trade history is temporarily unavailable, show an empty change
+  // until a live reference is available instead of presenting stale data.
+  const displayChange = stats?.change ?? candleStats?.change
+    ?? ((stats?.price == null && candleStats?.price == null && curveState?.priceUsd == null)
+      ? finiteNumber(token?.change24)
+      : null);
   const currentCurve = curveState?.mint === mint ? curveState : null;
   const poolRes = reserves || currentCurve;
+  const supply = finiteNumber(currentCurve?.tokenTotalSupply)
+    || finiteNumber(poolRes?.tokenTotalSupply)
+    || finiteNumber(token?.totalSupply)
+    || 1e9;
+  const displayMktCap = displayPrice != null ? displayPrice * supply : finiteNumber(token?.mktCap);
+  const curveProgress = currentCurve
+    ? (currentCurve.complete
+      ? 1
+      : currentCurve.source?.startsWith('PumpMeteora')
+        ? 1 - (Number(currentCurve.realToken || 0) / 793100000)
+        : 1 - (Number(currentCurve.realToken || 0) / 873000000))
+    : null;
+  const displayProgress = curveProgress != null && Number.isFinite(curveProgress)
+    ? Math.max(0, Math.min(1, curveProgress))
+    : finiteNumber(token?.domesticProgress);
 
   useEffect(() => {
     let alive = true;
@@ -225,15 +246,13 @@ export default function TokenDetail() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
           <div className="rounded-xl border border-border bg-bg-card p-2 shadow-card">
-            <div className="h-[380px] md:h-[460px]">
-              <TradingViewChart
-                token={chartToken}
-                liveTrades={trades}
-                refreshKey={chartRefresh}
-                onCandleStats={handleCandleStats}
-                visible
-              />
-            </div>
+            <TradingViewChart
+              token={chartToken}
+              liveTrades={trades}
+              refreshKey={chartRefresh}
+              onCandleStats={handleCandleStats}
+              visible
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -303,16 +322,16 @@ export default function TokenDetail() {
             )}
           </div>
 
-          {token?.domesticProgress != null && (
+          {displayProgress != null && (
             <div className="rounded-xl border border-border bg-bg-card p-4">
               <div className="mb-1.5 flex justify-between text-xs text-muted">
                 <span>Bonding curve progress</span>
-                <span>{fmt(Math.min(100, Number(token.domesticProgress) * 100), 1)}%</span>
+                <span>{fmt(Math.min(100, Number(displayProgress) * 100), 1)}%</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-bg-soft">
                 <div
                   className="h-full rounded-full bg-accent"
-                  style={{ width: `${Math.min(100, Number(token.domesticProgress) * 100)}%` }}
+                  style={{ width: `${Math.min(100, Number(displayProgress) * 100)}%` }}
                 />
               </div>
             </div>

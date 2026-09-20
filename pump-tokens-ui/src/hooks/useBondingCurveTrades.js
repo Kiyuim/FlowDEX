@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useConnection } from '@solana/wallet-adapter-react';
+import { Connection } from '@solana/web3.js';
 import { deriveBondingCurve, parsePumpEventLog } from '../lib/pump';
 import { METEORA_PROGRAMS, deriveMeteoraBondingCurve, parseMeteoraSwapEventLog } from '../lib/meteora';
 
@@ -28,6 +29,15 @@ function curveCandidates(mint) {
 // puts the hook in a cooldown instead of hammering the endpoint every poll.
 export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000 } = {}) {
   const { connection } = useConnection();
+  // The wallet adapter may be configured with the public devnet RPC, which is
+  // aggressively rate limited and frequently falls behind. When the build has
+  // a Helius key, use a dedicated Helius connection for both history and the
+  // subscription so the chart and Recent Trades share one reliable source.
+  const rpcConnection = useMemo(() => {
+    const key = process.env.REACT_APP_HELIUS_API_KEY;
+    if (!key) return connection;
+    return new Connection(`https://devnet.helius-rpc.com/?api-key=${key}`, 'confirmed');
+  }, [connection]);
   const [trades, setTrades] = useState([]);
   const [status, setStatus] = useState('loading');
   const cacheRef = useRef({ mint: null, bySig: new Map(), backoffUntil: 0 });
@@ -47,29 +57,62 @@ export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000
       // signatures is this token's real source.
       const candidates = curveCandidates(mint);
       let curve, parseEvent, sigs = [];
+      let fallback = null;
       for (const c of candidates) {
-        const s = await connection.getSignaturesForAddress(c.curve, { limit });
-        if (s.length) {
+        const s = await rpcConnection.getSignaturesForAddress(c.curve, { limit });
+        if (!s.length) continue;
+        // A PDA can have signatures that are unrelated to the swap event we
+        // decode (especially when the token is from another curve program).
+        // Selecting the first non-empty PDA made the page report no trades even
+        // though the correct candidate had them. Probe a few transactions and
+        // select the first candidate that actually contains a decoded event.
+        if (!fallback) fallback = { ...c, sigs: s };
+        let decoded = 0;
+        for (const item of s.slice(0, 5)) {
+          if (cache.bySig.has(item.signature)) {
+            decoded += cache.bySig.get(item.signature)?.length || 0;
+            continue;
+          }
+          try {
+            const tx = await rpcConnection.getParsedTransaction(item.signature, { maxSupportedTransactionVersion: 0 });
+            const events = [];
+            for (const log of tx?.meta?.logMessages || []) {
+              const ev = c.parse(log);
+              if (ev) events.push({ ...ev, time: ev.timestamp || tx.blockTime || 0, sig: item.signature });
+            }
+            cache.bySig.set(item.signature, events);
+            decoded += events.length;
+          } catch (probeErr) {
+            const msg = String(probeErr?.message || probeErr).toLowerCase();
+            if (msg.includes('too many requests') || msg.includes('429')) {
+              cache.backoffUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+              break;
+            }
+          }
+        }
+        if (decoded > 0) {
           curve = c.curve;
           parseEvent = c.parse;
           sigs = s;
           break;
         }
       }
+      if (!curve && fallback) {
+        curve = fallback.curve;
+        parseEvent = fallback.parse;
+        sigs = fallback.sigs;
+      }
       if (!sigs.length) {
-        setStatus('empty');
+        setStatus((s) => (s === 'ok' ? 'ok' : 'empty'));
         return;
       }
-      if (cache.curveKey !== curve.toBase58()) {
-        cache.curveKey = curve.toBase58();
-        cache.bySig = new Map();
-      }
+      cache.curveKey = curve.toBase58();
 
       const newSigs = sigs.filter((s) => !cache.bySig.has(s.signature)).slice(0, MAX_NEW_PER_POLL);
       for (let i = 0; i < newSigs.length; i++) {
         const sig = newSigs[i].signature;
         try {
-          const tx = await connection.getParsedTransaction(sig, { maxSupportedTransactionVersion: 0 });
+          const tx = await rpcConnection.getParsedTransaction(sig, { maxSupportedTransactionVersion: 0 });
           const events = [];
           const logs = tx?.meta?.logMessages;
           if (logs) {
@@ -100,7 +143,9 @@ export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000
         if (evs) out.push(...evs);
       }
       if (!out.length) {
-        setStatus('empty');
+        // Keep already-rendered trades visible while a provider is briefly
+        // rate-limited or while the source probe catches up.
+        setStatus((s) => (s === 'ok' ? 'ok' : 'empty'));
         return;
       }
       out.sort((a, b) => b.time - a.time); // newest first
@@ -116,7 +161,7 @@ export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000
       // partial progress is kept in the cache; next poll resumes where we left off
       setStatus((s) => (s === 'ok' ? 'ok' : 'error'));
     }
-  }, [connection, mint, limit]);
+  }, [rpcConnection, mint, limit]);
 
   // Subscribe directly to the curve accounts. This is the low-latency path:
   // Solana emits the transaction logs immediately, while the historical
@@ -129,6 +174,13 @@ export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000
     const heliusKey = process.env.REACT_APP_HELIUS_API_KEY;
     const wsEndpoint = process.env.REACT_APP_SOLANA_WS_URL ||
       (heliusKey ? `wss://devnet.helius-rpc.com/?api-key=${heliusKey}` : null);
+
+    // Ensure a WS event cannot arrive before the polling effect initializes the
+    // cache. This was the source of intermittent "Recent trades unavailable"
+    // on a freshly opened token page.
+    if (cacheRef.current.mint !== mint) {
+      cacheRef.current = { mint, bySig: new Map(), backoffUntil: 0 };
+    }
 
     const handleLogs = (parse, logInfo) => {
       if (cancelled || logInfo?.err || !logInfo?.logs) return;
@@ -159,32 +211,41 @@ export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000
       for (const { curve, parse } of curveCandidates(mint)) {
         if (wsEndpoint && typeof WebSocket !== 'undefined') {
           try {
-            const ws = new WebSocket(wsEndpoint);
-            sockets.push(ws);
-            ws.onopen = () => ws.send(JSON.stringify({
-              jsonrpc: '2.0', id: 1, method: 'logsSubscribe',
-              params: [{ mentions: [curve.toBase58()] }, { commitment: 'confirmed' }],
-            }));
-            ws.onmessage = (event) => {
-              try {
-                const msg = JSON.parse(event.data);
-                const value = msg?.params?.result?.value;
-                if (value) handleLogs(parse, { logs: value.logs, err: value.err, signature: value.signature });
-              } catch (_) { /* ignore malformed provider messages */ }
+            const record = { ws: null, timer: null, closed: false };
+            const connect = () => {
+              if (cancelled || record.closed) return;
+              const ws = new WebSocket(wsEndpoint);
+              record.ws = ws;
+              ws.onopen = () => ws.send(JSON.stringify({
+                jsonrpc: '2.0', id: 1, method: 'logsSubscribe',
+                params: [{ mentions: [curve.toBase58()] }, { commitment: 'confirmed' }],
+              }));
+              ws.onmessage = (event) => {
+                try {
+                  const msg = JSON.parse(event.data);
+                  const value = msg?.params?.result?.value;
+                  if (value) handleLogs(parse, { logs: value.logs, err: value.err, signature: value.signature });
+                } catch (_) { /* ignore malformed provider messages */ }
+              };
+              ws.onerror = () => ws.close();
+              ws.onclose = () => {
+                if (!cancelled && !record.closed) record.timer = setTimeout(connect, 3000);
+              };
             };
-            ws.onerror = () => ws.close();
+            sockets.push(record);
+            connect();
             continue;
           } catch (e) {
             console.warn('Helius logs WebSocket unavailable', e);
           }
         }
-        if (!connection?.onLogs) continue;
+        if (!rpcConnection?.onLogs) continue;
         try {
-          const id = await connection.onLogs(curve, (logInfo) => {
+          const id = await rpcConnection.onLogs(curve, (logInfo) => {
             handleLogs(parse, logInfo);
           }, 'confirmed');
           if (!cancelled) subscriptions.push(id);
-          else await connection.removeOnLogsListener(id);
+          else await rpcConnection.removeOnLogsListener(id);
         } catch (e) {
           // Some public RPC endpoints disable logsSubscribe. The existing
           // signature polling remains the fallback in that case.
@@ -195,10 +256,14 @@ export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000
     subscribe();
     return () => {
       cancelled = true;
-      sockets.forEach((ws) => { ws.onclose = null; ws.close(); });
-      for (const id of subscriptions) connection.removeOnLogsListener(id).catch(() => {});
+      sockets.forEach((record) => {
+        record.closed = true;
+        if (record.timer) clearTimeout(record.timer);
+        if (record.ws) { record.ws.onclose = null; record.ws.close(); }
+      });
+      for (const id of subscriptions) rpcConnection.removeOnLogsListener(id).catch(() => {});
     };
-  }, [connection, mint, limit]);
+  }, [rpcConnection, mint, limit]);
 
   useEffect(() => {
     load();

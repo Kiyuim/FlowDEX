@@ -1,8 +1,11 @@
 .tradingview-chart {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
   background: #1a1a1a;
   border-radius: 12px;
-  padding: 20px;
-  margin: 20px 0;
+  padding: 12px;
+  margin: 0;
   border: 1px solid #2a2a2a;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
@@ -11,7 +14,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
   gap: 15px;
 }
@@ -170,26 +173,26 @@
     padding: 15px;
     margin: 15px 0;
   }
-  
+
   .chart-header {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .chart-title h3 {
     font-size: 1.25rem;
   }
-  
+
   .interval-selector {
     flex-wrap: wrap;
   }
-  
+
   .interval-btn {
     padding: 6px 10px;
     font-size: 0.8rem;
     min-width: 30px;
   }
-  
+
   .chart-container {
     height: 350px !important;
   }
@@ -200,15 +203,15 @@
     padding: 12px;
     margin: 10px 0;
   }
-  
+
   .chart-title h3 {
     font-size: 1.1rem;
   }
-  
+
   .token-address {
     font-size: 0.75rem;
   }
-  
+
   .chart-container {
     height: 300px !important;
   }
@@ -296,7 +299,7 @@
     right: 5px;
     padding: 3px 6px;
   }
-  
+
   .status-indicator {
     font-size: 11px;
   }
@@ -339,9 +342,9 @@
     padding-left: 8px;
     gap: 6px;
   }
-  
+
   .mock-btn {
     padding: 4px 8px;
     font-size: 11px;
   }
-} 
+}
