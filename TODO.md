@@ -72,17 +72,25 @@
 - Removed Claude co-authorship from git history (all 19 commits rewritten,
   force-pushed) per explicit request; future commits won't add it either.
 
+## Done this round, continued
+
+- **Pool creation now records to Portfolio**: `CreatePoolInstructions` /
+  `BuildUnsignedPoolTransaction` now also return the derived pool state PDA;
+  `CreatePoolResponse.pool_address` (new proto field) carries it back;
+  `PoolCreation.js` calls `record_user_asset` with it after a successful
+  creation. Portfolio now shows both created tokens and created pools.
+- **Header nav wrapping below the brand**: `.tab-navigation` was
+  `flex-wrap: wrap`, so once brand + all 7 nav buttons didn't fit on one
+  row, the nav dropped to a second line instead of staying level with
+  FlowDEX. Nav now scrolls horizontally within its own row instead of
+  wrapping.
+
 ## Still open
 
 - **Create Token: PumpMeteora / PumpMeteora V2 launch targets**: requested,
   not started. Needs understanding the PumpMeteora on-chain program
   interface (bonding curve init instruction, fixed decimals/supply per the
   program) — this is new on-chain integration work, not a UI-only change.
-- **Pool creation doesn't record to Portfolio**: `trade.CreatePoolResponse`
-  only returns `tx_hash`, no pool state address, so there's nothing correct
-  to record as `asset_address` yet. Needs either a `pool_address` field added
-  to `CreatePoolResponse` (trade.proto) or the frontend deriving the CLMM
-  pool-state PDA client-side from the known seeds.
 - **Wallet-select modal off-center / "on the right side"**: reviewed the
   code — `position:fixed; inset:0; flex-center` is textbook-correct. Couldn't
   reproduce a bug in our own modal; likely the wallet browser extension's own
