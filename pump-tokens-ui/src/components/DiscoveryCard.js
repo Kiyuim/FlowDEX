@@ -2,10 +2,11 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { shortAddr } from '../lib/trade';
 import useWatchlist from '../hooks/useWatchlist';
+import { normalizeToken, tokenDisplayName, finiteNumber } from '../lib/tokenData';
 
 function compact(n, prefix = '') {
-  const v = Number(n);
-  if (!v || isNaN(v)) return '—';
+  const v = finiteNumber(n);
+  if (v == null) return '—';
   const abs = Math.abs(v);
   if (abs >= 1e9) return `${prefix}${(v / 1e9).toFixed(2)}B`;
   if (abs >= 1e6) return `${prefix}${(v / 1e6).toFixed(2)}M`;
@@ -22,11 +23,12 @@ function age(ts) {
   return `${Math.floor(s / 86400)}d`;
 }
 
-export default function DiscoveryCard({ token, fresh }) {
+export default function DiscoveryCard({ token: rawToken, fresh }) {
+  const token = normalizeToken(rawToken);
   const navigate = useNavigate();
   const { isFav, toggle } = useWatchlist();
   const mint = token.tokenAddress;
-  const change = Number(token.change24 || 0);
+  const change = finiteNumber(token.change24);
   const progress = token.domesticProgress != null ? Math.min(100, Number(token.domesticProgress) * 100) : null;
   const fav = isFav(mint);
 
@@ -45,7 +47,7 @@ export default function DiscoveryCard({ token, fresh }) {
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate font-semibold text-ink">{token.tokenName || token.tokenSymbol || 'Token'}</span>
+            <span className="truncate font-semibold text-ink">{tokenDisplayName(token)}</span>
             {token.tokenSymbol && <span className="shrink-0 text-xs text-muted">{token.tokenSymbol}</span>}
             {fresh && <span className="shrink-0 rounded bg-accent/20 px-1 text-[10px] font-bold text-accent">NEW</span>}
           </div>
@@ -54,7 +56,7 @@ export default function DiscoveryCard({ token, fresh }) {
             {token.launchTime ? <span>· {age(token.launchTime)}</span> : null}
           </div>
         </div>
-        {change !== 0 && (
+        {change != null && (
           <span className={`shrink-0 text-sm font-semibold ${change >= 0 ? 'text-up' : 'text-down'}`}>
             {change >= 0 ? '+' : ''}
             {change.toFixed(1)}%

@@ -158,7 +158,7 @@ func (s *BlockService) SavePairInfo(ctx context.Context, chainId int64, pairAddr
 	}
 
 	if tokenDb.TotalSupply == 0 {
-		fmt.Println("111111111SavePairInfo token totalSupply is 0, tokenDb: %#v", tokenDb)
+		fmt.Printf("111111111SavePairInfo token totalSupply is 0, tokenDb: %#v", tokenDb)
 		s.Errorf("savePairInfo token totalSupply is 0, tokenDb: %#v", tokenDb)
 	}
 	fmt.Println("5555555555555555555555")
@@ -173,7 +173,7 @@ func (s *BlockService) SavePairInfo(ctx context.Context, chainId int64, pairAddr
 
 	_, err = s.SavePair(ctx, trade, tokenDb)
 	if err != nil {
-		fmt.Println("77777777777777777777:SavePair err: %v", err)
+		fmt.Printf("77777777777777777777:SavePair err: %v", err)
 	}
 
 	for _, tradeInfo := range trades {
@@ -370,11 +370,11 @@ func (s *BlockService) SaveRaydiumCLMMPoolInfo(ctx context.Context, pair *types.
 		// dbPool.RemainingAccounts = strings.Join(remainingAccounts, ",")
 
 		// Instead, always use the JSON array string
-		if dbPool!=nil{
+		if dbPool != nil {
 			dbPool.RemainingAccounts = remainingAccountsStr
-			
-		fmt.Println("remainingAccountsStr is:", dbPool.RemainingAccounts)
-		fmt.Println("dbPool.TickArray is:", dbPool.TickArray)
+
+			fmt.Println("remainingAccountsStr is:", dbPool.RemainingAccounts)
+			fmt.Println("dbPool.TickArray is:", dbPool.TickArray)
 
 		}
 

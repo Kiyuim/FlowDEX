@@ -689,7 +689,7 @@ func DecodeInstruction(
 	program := tx.AccountKeys[instruction.ProgramIDIndex].String()
 
 	if program == clmm.ProgramClMMDevNet.String() || program == "A1izdbCxDvLjZ2WZFkPdSLNBrrYrhBqxmmzCkm82G4ys" {
-		fmt.Println("22222DecodeInstruction: Processing program %s for tx %s", program, dtx.TxHash)
+		fmt.Printf("22222DecodeInstruction: Processing program %s for tx %s", program, dtx.TxHash)
 	}
 
 	if program == ProgramStrPumpAmm {
@@ -762,7 +762,7 @@ func DecodeInstruction(
 		// trade, err = DecodeTokenProgramInstruction(ctx, sc, dtx, instruction, index)
 
 		// if trade != nil {
-		// 	fmt.Println("find token program tx: %v", trade.TxHash)
+		// 	fmt.Printf("find token program tx: %v", trade.TxHash)
 		// }
 		// return trade, err
 	} else if program == common.Token2022ProgramID.String() {

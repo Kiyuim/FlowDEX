@@ -191,7 +191,10 @@ func (s *BlockService) SavePair(ctx context.Context, trade *types.TradeWithPair,
 		}
 		pairAtDB.CurrentBaseTokenAmount = trade.CurrentBaseTokenInPoolAmount
 		pairAtDB.CurrentTokenAmount = trade.CurrentTokenInPoolAmount
-		pairAtDB.Fdv = liq
+		if tokenTotalSupply > 0 && trade.TokenPriceUSD > 0 {
+			pairAtDB.Fdv = tokenTotalSupply * trade.TokenPriceUSD
+			pairAtDB.MktCap = pairAtDB.Fdv
+		}
 		fmt.Println("trade.CurrentBaseTokenInPoolAmount is:", trade.CurrentBaseTokenInPoolAmount)
 		fmt.Println("trade.BaseTokenPriceUSD is:", trade.BaseTokenPriceUSD)
 		fmt.Println("trade.CurrentTokenInPoolAmount is:", trade.CurrentTokenInPoolAmount)

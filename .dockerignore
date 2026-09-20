@@ -10,3 +10,11 @@ tools
 scripts
 docker
 cmd/debugtools
+
+# Local credentials and CLI/editor state are not deployment assets.
+*.key
+*.pem
+.claude
+.vercel
+**/.vercel
+**/.env*

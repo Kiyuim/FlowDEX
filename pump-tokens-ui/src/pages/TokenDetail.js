@@ -11,6 +11,8 @@ import useWatchlist from '../hooks/useWatchlist';
 import { shortAddr } from '../lib/trade';
 import { readCurveState } from '../lib/curve';
 
+import { mergeToken, normalizeToken, tokenDisplayName, finiteNumber } from '../lib/tokenData';
+
 function Stat({ label, value }) {
   return (
     <div className="rounded-lg border border-border bg-bg-card px-3 py-2">
@@ -21,38 +23,12 @@ function Stat({ label, value }) {
 }
 
 async function fetchTokenByMint(mint, walletAddress) {
-  for (const st of [1, 2, 4]) {
-    try {
-      const r = await fetch(
-        `/v1/market/index_pump?chain_id=100000&pump_status=${st}&page_no=1&page_size=100`
-      );
-      const d = (await r.json())?.data?.list || [];
-      const found = d.find((t) => t.tokenAddress === mint);
-      if (found) return found;
-    } catch {}
-  }
-  // Not indexed yet — if it's one of your own created tokens, its real
-  // name/symbol/icon is already recorded (record_user_asset at creation
-  // time), independent of indexing. Covers navigating here directly
-  // (pasted link, Sources page) rather than via Portfolio's own list,
-  // which already carries this in router state.
-  if (walletAddress) {
-    try {
-      const r = await fetch(`/v1/market/user_tokens?chain_id=100000&wallet_address=${walletAddress}`);
-      const d = (await r.json())?.data?.list || [];
-      const found = d.find((t) => t.tokenAddress === mint);
-      if (found) {
-        return {
-          tokenAddress: found.tokenAddress,
-          tokenName: found.tokenName,
-          tokenSymbol: found.tokenSymbol,
-          tokenIcon: found.tokenIcon,
-          pairAddress: mint, // real one recovered by readCurveState separately
-        };
-      }
-    } catch {}
-  }
-  return null;
+  const indexed = fetch(`/v1/market/index_pump?chain_id=100000&token_address=${encodeURIComponent(mint)}&pump_status=1&page_size=100`)
+    .then((r) => r.json()).then((d) => (d?.data?.list || []).map(normalizeToken).find((t) => t.tokenAddress === mint)).catch(() => null);
+  const recorded = walletAddress ? fetch(`/v1/market/user_tokens?chain_id=100000&wallet_address=${walletAddress}`)
+    .then((r) => r.json()).then((d) => (d?.data?.list || []).map(normalizeToken).find((t) => t.tokenAddress === mint)).catch(() => null) : Promise.resolve(null);
+  const [live, own] = await Promise.all([indexed, recorded]);
+  return live || own ? mergeToken(live, own) : null;
 }
 
 export default function TokenDetail() {
@@ -67,6 +43,7 @@ export default function TokenDetail() {
   const { reserves, status: reservesStatus, reload: reloadReserves } = useBondingCurveReserves(mint);
   const { isFav, toggle } = useWatchlist();
   const [ordersTick, setOrdersTick] = useState(0);
+  const [chartRefresh, setChartRefresh] = useState(0);
 
   // Live bonding-curve state read straight from chain (source-aware: pump.fun /
   // PumpMeteora / V2). Gives a brand-new token a real STARTING price + reserves
@@ -75,7 +52,7 @@ export default function TokenDetail() {
   const [curveState, setCurveState] = useState(null);
   const reloadCurveState = useCallback(() => {
     if (!mint) return;
-    readCurveState(connection, mint).then(setCurveState).catch(() => {});
+    readCurveState(connection, mint).then((state) => setCurveState(state ? { ...state, mint } : null)).catch(() => {});
   }, [mint, connection]);
   useEffect(() => {
     if (!mint) return undefined;
@@ -88,6 +65,7 @@ export default function TokenDetail() {
   // without an explicit kick, the page just looks unchanged right after a
   // trade until the next scheduled poll happens to land.
   const handleTradeComplete = useCallback(() => {
+    setChartRefresh((n) => n + 1);
     reloadCurveState();
     reloadReserves();
     reloadTrades();
@@ -116,12 +94,13 @@ export default function TokenDetail() {
     return `$${v.toFixed(2)}`;
   };
   const priceStr = (p) => (p == null ? '—' : p < 0.001 ? `$${p.toExponential(2)}` : `$${p.toFixed(6)}`);
-  // Price to show: trade-derived when available, else the live bonding-curve price.
-  const displayPrice = stats?.price ?? curveState?.priceUsd ?? null;
-  // reserves hook is pump.fun-only; fall back to the source-aware curve read.
-  const poolRes = reserves || curveState;
-  // Only mount the (heavier) candle chart once there's real on-chain trade
-  // activity to show — otherwise it's an empty canvas with nothing in it.
+  // Prefer the same indexed market data used by Discovery; direct RPC trades
+  // are only a recent sample, not the full 24-hour volume.
+  const displayPrice = finiteNumber(token?.price) || stats?.price || (curveState?.mint === mint ? curveState.priceUsd : null) || null;
+  const displayVolume = finiteNumber(token?.vol24h);
+  const displayChange = finiteNumber(token?.change24);
+  const currentCurve = curveState?.mint === mint ? curveState : null;
+  const poolRes = reserves || currentCurve;
 
   useEffect(() => {
     let alive = true;
@@ -131,23 +110,23 @@ export default function TokenDetail() {
     // Don't block the UI with a spinner if we already have something to
     // show from nav state though.
     if (!token || token.tokenAddress !== mint) setLoading(true);
-    fetchTokenByMint(mint, publicKey?.toString()).then((t) => {
+    const refresh = async () => {
+      const t = await fetchTokenByMint(mint, publicKey?.toString());
       if (!alive) return;
       setToken((prev) => {
-        if (t) return t; // indexed data is always the most complete
-        if (prev && prev.tokenAddress === mint) {
-          // Keep whatever we were passed, but make sure pairAddress is set —
-          // without it the kline fetch and chart both silently no-op.
-          return { ...prev, pairAddress: prev.pairAddress || mint };
-        }
-        return { tokenAddress: mint, tokenSymbol: 'TOKEN', pairAddress: mint };
+        const base = prev?.tokenAddress === mint ? prev : { tokenAddress: mint };
+        return mergeToken(base, t);
       });
       setLoading(false);
-    });
-    return () => {
-      alive = false;
     };
-  }, [mint, publicKey]); // eslint-disable-line
+    // Router state belongs to this navigation; never show a previous mint's name.
+    setToken((prev) => mergeToken(prev?.tokenAddress === mint ? prev : { tokenAddress: mint }, location.state?.token?.tokenAddress === mint ? location.state.token : null));
+    refresh();
+    const timer = window.setInterval(refresh, 15000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [mint, publicKey, location.state, chartRefresh]); // eslint-disable-line
+
+  const chartToken = useMemo(() => ({ ...token, pairAddress: (curveState?.mint === mint ? curveState.pairAddress : null) || token?.pairAddress }), [token, curveState, mint]);
 
   const fmt = (v, d = 2) =>
     v == null || v === '' ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: d });
@@ -168,7 +147,7 @@ export default function TokenDetail() {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h1 className="truncate text-xl font-bold text-ink">
-              {token?.tokenName || token?.tokenSymbol || 'Token'}
+              {tokenDisplayName(token)}
             </h1>
             {token?.tokenSymbol && (
               <span className="rounded bg-bg-elev px-1.5 py-0.5 text-xs text-muted">
@@ -207,7 +186,7 @@ export default function TokenDetail() {
                 // trades — an old seeded token can have real backend kline
                 // history with zero on-chain trades (or vice versa for a
                 // brand-new one). It shows its own empty state either way.
-                <TradingViewChart token={token} visible />
+                <TradingViewChart token={chartToken} refreshKey={chartRefresh} visible />
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
                   <div className="text-4xl">🌱</div>
@@ -227,37 +206,24 @@ export default function TokenDetail() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <Stat
               label="Price"
               value={
                 <span className="flex items-baseline gap-1.5">
                   {priceStr(displayPrice)}
-                  {stats?.change != null && (
-                    <span className={`text-xs ${stats.change >= 0 ? 'text-up' : 'text-down'}`}>
-                      {stats.change >= 0 ? '+' : ''}
-                      {stats.change.toFixed(1)}%
+                  {displayChange != null && (
+                    <span className={`text-xs ${displayChange >= 0 ? 'text-up' : 'text-down'}`}>
+                      {displayChange >= 0 ? '+' : ''}
+                      {displayChange.toFixed(1)}%
                     </span>
                   )}
                 </span>
               }
             />
-            <Stat label="24h Volume" value={stats ? money(stats.vol24h) : '—'} />
-            <Stat
-              label="24h Trades"
-              value={
-                stats ? (
-                  <span>
-                    {fmt(stats.txns24h, 0)}{' '}
-                    <span className="text-[11px] text-up">{stats.buys24h}B</span>
-                    <span className="text-[11px] text-muted">/</span>
-                    <span className="text-[11px] text-down">{stats.sells24h}S</span>
-                  </span>
-                ) : (
-                  '—'
-                )
-              }
-            />
+            <Stat label="24h Volume" value={displayVolume != null ? money(displayVolume) : '—'} />
+            <Stat label="Market Cap" value={money(finiteNumber(token?.mktCap))} />
+            <Stat label="24h Trades" value={fmt(finiteNumber(token?.txs24h), 0)} />
             <Stat label="Traders" value={fmt(stats?.traders, 0)} />
           </div>
 

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import DiscoveryCard from '../components/DiscoveryCard';
+import { mergeToken, normalizeToken } from '../lib/tokenData';
 import useTokenListWebSocket from '../hooks/useTokenListWebSocket';
 import useWatchlist from '../hooks/useWatchlist';
 
@@ -42,7 +43,7 @@ export default function Discovery() {
           const m = mintOf(t);
           if (!m || seen.has(m)) continue;
           seen.add(m);
-          out.push(t);
+          out.push(normalizeToken(t));
         }
         return out;
       };
@@ -87,11 +88,15 @@ export default function Discovery() {
     (t) => {
       const m = mintOf(t);
       if (!m) return;
-      const bucket = t.pumpStatus === 2 ? 'completing' : t.pumpStatus === 4 ? 'completed' : 'new';
+      t = normalizeToken(t);
+      const status = Number(t.pumpStatus);
+      const bucket = status === 2 ? 'completing' : status === 4 ? 'completed' : 'new';
       setLists((ls) => {
         const strip = (arr) => arr.filter((x) => mintOf(x) !== m);
         const next = { new: strip(ls.new), completing: strip(ls.completing), completed: strip(ls.completed) };
-        next[bucket] = [t, ...next[bucket]].slice(0, 60);
+        const existing = [...ls.new, ...ls.completing, ...ls.completed].find((x) => mintOf(x) === m);
+        const target = t.pumpStatus == null ? (Object.keys(ls).find((key) => ls[key].some((x) => mintOf(x) === m)) || bucket) : bucket;
+        next[target] = [mergeToken(existing, t), ...next[target]].slice(0, 60);
         return next;
       });
       markFresh(m);

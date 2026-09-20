@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createChart } from 'lightweight-charts';
 import './TradingViewChart.css';
+import { websocketURL } from '../lib/websocket';
+import { tokenDisplayName } from '../lib/tokenData';
+import { hitsCandle } from '../lib/candleHit';
 
 // API URL configuration - using the same pattern as other components
 const API_URL = process.env.NODE_ENV === 'development' 
@@ -19,13 +22,15 @@ function upsertCandle(series, candle) {
   return [...series, candle].sort((a, b) => a.time - b.time);
 }
 
-const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
+const TradingViewChart = ({ token, visible = true, mockMode = false, refreshKey = 0 }) => {
   const chartContainerRef = useRef();
   const chartRef = useRef();
   const candlestickSeriesRef = useRef();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [interval, setInterval] = useState('1h');
+  const [interval, setChartInterval] = useState('1h');
+  const fetchGeneration = useRef(0);
+  const pendingFetch = useRef(null);
   const [wsConnection, setWsConnection] = useState(null);
   const mockIntervalRef = useRef(null);
   const candleDataRef = useRef([]); // full series, kept in time order, for prev-close lookup
@@ -100,19 +105,15 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
           setClickInfo(null);
           return;
         }
-        // lightweight-charts' click event is time-column-based — it fires for
-        // any click within a candle's time slot, including the blank space
-        // above/below the actual wick. Only show the info card when the click
-        // lands within the rendered high-low pixel range (with a small
-        // tolerance so hitting a thin wick line isn't overly finicky).
-        const highY = candlestickSeriesRef.current.priceToCoordinate(candle.high);
-        const lowY = candlestickSeriesRef.current.priceToCoordinate(candle.low);
-        if (highY == null || lowY == null) {
-          setClickInfo(null);
-          return;
-        }
-        const tolerance = 6;
-        if (param.point.y < highY - tolerance || param.point.y > lowY + tolerance) {
+        if (!hitsCandle({
+          x: param.point.x, y: param.point.y,
+          centerX: chart.timeScale().timeToCoordinate(param.time),
+          openY: candlestickSeriesRef.current.priceToCoordinate(candle.open),
+          closeY: candlestickSeriesRef.current.priceToCoordinate(candle.close),
+          highY: candlestickSeriesRef.current.priceToCoordinate(candle.high),
+          lowY: candlestickSeriesRef.current.priceToCoordinate(candle.low),
+          barSpacing: chart.timeScale().options().barSpacing,
+        })) {
           setClickInfo(null);
           return;
         }
@@ -142,6 +143,8 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
       return () => {
         window.removeEventListener('resize', handleResize);
         chart.remove();
+        chartRef.current = null;
+        candlestickSeriesRef.current = null;
       };
     } catch (error) {
       console.error('Error creating TradingView chart:', error);
@@ -221,6 +224,7 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         try {
           candlestickSeriesRef.current.update(chartData);
           candleDataRef.current = upsertCandle(candleDataRef.current, chartData);
+                setError('');
           lastPrice = chartData.close; // Update base price for next iteration
         } catch (error) {
           console.warn('Mock data update error:', error);
@@ -248,6 +252,7 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         try {
           candlestickSeriesRef.current.update(chartData);
           candleDataRef.current = upsertCandle(candleDataRef.current, chartData);
+                setError('');
           lastPrice = chartData.close;
         } catch (error) {
           console.warn('Mock data update error:', error);
@@ -291,9 +296,7 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         // subscribes to the Redis kline:updates channel that dataflow publishes).
         // Set REACT_APP_KLINE_WS_URL to the websocket service origin, e.g.
         // wss://websocket-production-3acc.up.railway.app
-        const KLINE_BASE = process.env.REACT_APP_KLINE_WS_URL
-          || (window.location.hostname === 'localhost' ? 'ws://localhost:8085' : `wss://${window.location.hostname}`);
-        const wsUrl = `${KLINE_BASE.replace(/\/$/, '')}/ws/kline?pair_address=${token.pairAddress}&chain_id=100000&interval=${interval}`;
+        const wsUrl = websocketURL('/ws/kline', { pair_address: token.pairAddress, chain_id: 100000, interval }, true);
         const ws = new WebSocket(wsUrl);
         activeWs = ws;
 
@@ -371,6 +374,7 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
               try {
                 candlestickSeriesRef.current.update(chartData);
                 candleDataRef.current = upsertCandle(candleDataRef.current, chartData);
+                setError('');
                 console.log('Chart updated successfully with timestamp:', chartData.time);
               } catch (updateError) {
                 console.error('Error updating chart:', updateError);
@@ -444,7 +448,12 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
   // socket's whole lifecycle, so no separate unmount cleanup is needed.
 
   // Fetch kline data
-  const fetchKlineData = async (selectedInterval = interval) => {
+  const fetchKlineData = async (selectedInterval = interval, background = false) => {
+    if (background && pendingFetch.current) return;
+    const generation = ++fetchGeneration.current;
+    pendingFetch.current?.abort();
+    const controller = new AbortController();
+    pendingFetch.current = controller;
     if (!token?.pairAddress || !candlestickSeriesRef.current) {
       console.warn('Cannot fetch kline data:', { 
         hasPairAddress: !!token?.pairAddress,
@@ -452,11 +461,12 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         hasCandlestickSeries: !!candlestickSeriesRef.current,
         token 
       });
+      pendingFetch.current = null;
       return;
     }
 
     console.log('Fetching kline data for pair:', token.pairAddress);
-    setIsLoading(true);
+    if (!background) setIsLoading(true);
     setError('');
 
     try {
@@ -482,12 +492,14 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
 
       const response = await fetch(`${API_URL}/v1/market/get_candlestick?${params}`, {
         method: 'GET',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
         },
       });
 
       const data = await response.json();
+      if (generation !== fetchGeneration.current || !candlestickSeriesRef.current) return;
 
       if (!response.ok) {
         throw new Error(data.message || 'Failed to fetch kline data');
@@ -542,14 +554,16 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         setError('No chart data available for this token');
       }
     } catch (error) {
+      if (error.name === 'AbortError' || generation !== fetchGeneration.current) return;
       console.error('Error fetching kline data:', error);
+      if (background) return;
       if (candlestickSeriesRef.current) {
         candlestickSeriesRef.current.setData([]);
         candleDataRef.current = [];
       }
       setError('Failed to load chart data: ' + error.message);
     } finally {
-      setIsLoading(false);
+      if (generation === fetchGeneration.current) { pendingFetch.current = null; setIsLoading(false); }
     }
   };
 
@@ -558,13 +572,14 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
     setClickInfo(null);
     if (token?.pairAddress && visible) {
       fetchKlineData(interval);
+      const timer = window.setInterval(() => fetchKlineData(interval, true), 15000);
+      return () => { window.clearInterval(timer); ++fetchGeneration.current; pendingFetch.current?.abort(); pendingFetch.current = null; };
     }
-  }, [token?.pairAddress, interval, visible]);
+  }, [token?.pairAddress, interval, visible, refreshKey]);
 
   // Interval change handler
   const handleIntervalChange = (newInterval) => {
-    setInterval(newInterval);
-    fetchKlineData(newInterval);
+    setChartInterval(newInterval);
   };
 
   // Expected state for a token with no candles yet (real or otherwise) — shown
@@ -577,7 +592,7 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
     <div className="tradingview-chart">
       <div className="chart-header">
         <div className="chart-title">
-          <h3>{token?.tokenName || 'Token'} Price Chart</h3>
+          <h3>{tokenDisplayName(token)} Price Chart</h3>
           <span className="token-address">Pair: {token?.pairAddress}</span>
         </div>
         
@@ -621,6 +636,7 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
                   if (candlestickSeriesRef.current) {
                     candlestickSeriesRef.current.update(chartData);
                     candleDataRef.current = upsertCandle(candleDataRef.current, chartData);
+                setError('');
                   }
                 }}
               >

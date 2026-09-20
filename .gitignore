@@ -48,3 +48,5 @@ DEPLOY-devnet.md
 # revisit this — but don't gitignore them again without also fixing how
 # Railway gets its config.
 .claude/
+.vercel
+.env*

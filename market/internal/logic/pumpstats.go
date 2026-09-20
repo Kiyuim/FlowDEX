@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"dex/model/solmodel"
@@ -39,28 +40,39 @@ func Fetch24hStats(ctx context.Context, db *gorm.DB, chainId int64, pairAddresse
 	}
 	var rows []row
 
-	since := time.Now().Add(-24 * time.Hour)
-	// GROUP_CONCAT + SUBSTRING_INDEX picks the first/last value in each
-	// ORDER BY group without relying on window functions.
-	err := db.WithContext(ctx).
-		Model(&solmodel.Trade{}).
-		Select(`pair_addr as pair_addr,
-			COUNT(*) as cnt,
-			COALESCE(SUM(total_usd), 0) as vol,
-			CAST(SUBSTRING_INDEX(GROUP_CONCAT(token_price_usd ORDER BY block_time ASC), ',', 1) AS DECIMAL(65,18)) as first_price,
-			CAST(SUBSTRING_INDEX(GROUP_CONCAT(token_price_usd ORDER BY block_time DESC), ',', 1) AS DECIMAL(65,18)) as last_price`).
-		Where("chain_id = ? AND pair_addr IN ? AND block_time >= ?", chainId, pairAddresses, since).
-		Group("pair_addr").
-		Scan(&rows).Error
-	if err != nil {
-		return nil, err
-	}
-
-	for _, r := range rows {
-		result[r.PairAddr] = PumpToken24hStats{
-			Txs: r.Cnt, Vol: r.Vol, FirstPrice: r.FirstPrice, LastPrice: r.LastPrice,
+	now := time.Now().UTC()
+	since := now.Add(-24 * time.Hour)
+	// The consumer writes daily shards, never the legacy trade table.
+	// Query each day separately and merge chronologically across midnight.
+	for day := time.Date(since.Year(), since.Month(), since.Day(), 0, 0, 0, 0, time.UTC); !day.After(now); day = day.AddDate(0, 0, 1) {
+		table := fmt.Sprintf("trade_%s", day.Format("2006_01_02"))
+		if !db.Migrator().HasTable(table) {
+			continue
+		}
+		rows = nil
+		err := db.WithContext(ctx).Table(table).
+			Select(`pair_addr,
+    COUNT(*) as cnt,
+    COALESCE(SUM(ABS(total_usd)), 0) as vol,
+    CAST(SUBSTRING_INDEX(GROUP_CONCAT(token_price_usd ORDER BY block_time ASC, id ASC), ',', 1) AS DECIMAL(65,18)) as first_price,
+    CAST(SUBSTRING_INDEX(GROUP_CONCAT(token_price_usd ORDER BY block_time DESC, id DESC), ',', 1) AS DECIMAL(65,18)) as last_price`).
+			Where("chain_id = ? AND pair_addr IN ? AND block_time >= ? AND block_time <= ? AND trade_type IN ?", chainId, pairAddresses, since, now, []string{"buy", "sell"}).
+			Group("pair_addr").Scan(&rows).Error
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			old := result[r.PairAddr]
+			if old.Txs == 0 {
+				old.FirstPrice = r.FirstPrice
+			}
+			old.Txs += r.Cnt
+			old.Vol += r.Vol
+			old.LastPrice = r.LastPrice
+			result[r.PairAddr] = old
 		}
 	}
+
 	return result, nil
 }
 

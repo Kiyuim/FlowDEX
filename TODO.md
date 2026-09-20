@@ -1,5 +1,35 @@
 # TODO
 
+## Frontend market data and token metadata (2026-09-20)
+
+- Fixed the `Token`/blank-name regression: detail pages now preserve names
+  passed from Portfolio and merge indexed/user-created metadata without letting
+  placeholder values overwrite real names. Exact mint lookup is supported.
+- Fixed homepage and detail stats: 24h volume and price change now read the
+  daily `trade_YYYY_MM_DD` shards used by the consumer. Market cap is derived
+  from token supply and current token price instead of being replaced by pool
+  liquidity. Cache keys now include chain, status, page, and mint.
+- Normalized protojson field variants (`vol_24h`, `vol24H`, etc.) and retained
+  legitimate zero values. Token-list and K-line WebSockets use the configured
+  Railway origin and reconnect safely.
+- Fixed chart refresh polling and candle hit detection. Blank chart space no
+  longer opens candle details; clicking the candle body or wick does.
+- Verified against the Railway database: the previously broken mints now return
+  real metadata and nonzero stats. Both production WebSocket endpoints accept
+  connections. Latest Vercel production deployment is Ready and includes the
+  WebSocket environment variables.
+
+## Still open
+
+- Automatic follow-up sells for double-out/trailing-stop still require an SPL
+  delegate approval transaction signed by the user's wallet. The reference
+  devnet repository has the same server-side behavior and no completed
+  delegate flow; this cannot be made custodial without changing the wallet
+  consent model. Keep these orders visibly Failed when the user has not granted
+  authority rather than routing the buy through the platform wallet.
+- A final browser wallet test is still needed for a real buy, sell, and the
+  user-approved delegate path.
+
 ## Done this round, latest (2026-09-20, UX after the buy/sell fix)
 
 - **Sell 25/50/75/100% presets didn't show the amount**: they tracked an
@@ -488,3 +518,48 @@ frontend expectations haven't been cross-checked against all of it).
 - **Token-2022 launch-target UI**: replaced the toggle-switch with a 3-tab
   selector (Standard SPL / Token-2022 / PumpMeteora) per requested reference
   design.
+
+## Kline "not real-time" — traced to a missing Vercel env var, not a pipeline bug (2026-09-20)
+
+User reported the kline chart never updates live and sells don't produce
+candles. Traced the whole pipeline end to end:
+
+- Direct `curl` to `/v1/market/get_candlestick` with a proper
+  `from_timestamp`/`to_timestamp` window (not a bare `limit=20`, which just
+  returns the oldest 20 candles chronologically) shows the aggregation is
+  actually working: candles before real trading started are flat/zero-volume
+  placeholders, then real trades produce real, changing-price,
+  nonzero-volume candles up to the current time. `dataflow`'s
+  `calckline.go` and its `WHERE name IN (...)`-fixed pair lookups are fine.
+  My earlier "flat candles" finding was an artifact of querying without a
+  recent time window, not a real bug.
+- `TradingViewChart.js`'s `fetchKlineData` already uses a correct rolling
+  `now - lookback` to `now` window, so a manual refresh/interval-switch
+  does pull live data.
+- The missing piece is push updates: `dataflow/internal/mqs/consumers/
+  trade_consumer.go` publishes every new/updated kline (all intervals,
+  including the UI's default `1h`) to Redis `kline:updates`; the
+  `websocket` service subscribes and rebroadcasts to matching
+  `/ws/kline?pair_address=...` clients — this side of the code is correct.
+- But the frontend's WS URL (`TradingViewChart.js` line ~278) is
+  `process.env.REACT_APP_KLINE_WS_URL || wss://${window.location.hostname}`.
+  Confirmed via `.env*` search (none exist in the repo — these are
+  Vercel-dashboard-only vars) and via the still-open action item from the
+  2026-09-20 frontend swap entry above that this var was never confirmed
+  set. Without it, the chart's WebSocket tries to connect to
+  `wss://<the-vercel-frontend-domain-itself>`, which Vercel doesn't proxy —
+  it fails silently (no visible error), so the chart only ever shows
+  whatever it fetched on mount/interval-switch and never gets live pushed
+  updates. This fully explains "kline isn't real-time" without requiring
+  any backend or pipeline fix.
+
+**Action needed (user-side, can't be done from this session — no Vercel
+CLI/token available)**: in the Vercel project's dashboard → Settings →
+Environment Variables, add:
+- `REACT_APP_KLINE_WS_URL=wss://websocket-production-4109.up.railway.app`
+- `REACT_APP_WS_URL=wss://websocket-production-4109.up.railway.app` (same
+  service, used by the token-list live feed — same missing-var symptom)
+
+then redeploy. (Confirmed `websocket-production-4109.up.railway.app` is the
+live public domain for the `websocket` Railway service via `railway
+status --json`.)

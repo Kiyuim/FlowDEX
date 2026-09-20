@@ -1,0 +1,8 @@
+# This Vercel project builds only the React frontend.
+*
+!pump-tokens-ui/
+!pump-tokens-ui/**
+pump-tokens-ui/node_modules/
+pump-tokens-ui/build/
+pump-tokens-ui/.env*
+pump-tokens-ui/.vercel/

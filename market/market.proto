@@ -160,6 +160,7 @@ message TokenInfoItem {
 
 // GetPumpTokenList
 message GetPumpTokenListRequest {
+  string token_address = 7; // Exact mint lookup, independent of list pagination
   int64 chain_id = 1;
   int32 pump_status = 2;
   string sorted_type = 3;
@@ -174,6 +175,7 @@ message GetPumpTokenListResponse {
 }
 
 message PumpTokenItem {
+  string token_symbol = 18;
   int64 chain_id = 1;
   string chain_icon = 2;
   string token_address = 3;

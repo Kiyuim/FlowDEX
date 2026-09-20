@@ -9,7 +9,7 @@ import (
 	"dex/market/internal/svc"
 	"dex/market/market"
 	"dex/model/solmodel"
-	"dex/pkg/chain"
+	pkgconstants "dex/pkg/constants"
 	"dex/pkg/solprice"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -29,159 +29,65 @@ func NewGetPumpTokenListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 	}
 }
 
-// Get pump token list data
+// PumpListCacheKey includes pagination and chain; old cache writers cannot
+// overwrite a request with another page or with the pre-enrichment schema.
+func PumpListCacheKey(chainID int64, status, page, size int32, mint string) string {
+	return fmt.Sprintf("pump-token-list-v2:%d:%d:%d:%d:%s", chainID, status, page, size, mint)
+}
+
 func (l *GetPumpTokenListLogic) GetPumpTokenList(in *market.GetPumpTokenListRequest) (*market.GetPumpTokenListResponse, error) {
-	var resultList []*market.PumpTokenItem
-	var pairList []solmodel.Pair
-	var err error
-	pairModel := solmodel.NewPairModel(l.svcCtx.DB)
-	redisClient := l.svcCtx.RDS
-	pairCacheKey := fmt.Sprint("pump-token-list-", in.PumpStatus)
-	solPriceUsd := solprice.GetSolUsdPrice()
-
-	//list
-	fmt.Println("pairCacheKey is:", pairCacheKey)
-
-	// get result list from cache
-	cachedData, err := redisClient.Get(pairCacheKey)
-	if err == nil && cachedData != "" {
-		err = json.Unmarshal([]byte(cachedData), &resultList)
-		if err != nil {
-			logx.Errorf("Failed to unmarshal cached data: %v", err)
-			return nil, err
-		}
-
-		fmt.Println("resultList length is:", len(resultList))
-		return &market.GetPumpTokenListResponse{
-			List:        resultList,
-			Total:       int32(len(resultList)),
-			SolPriceUsd: solPriceUsd,
-		}, nil
-	} else {
-		in.PageNo = 1
-		in.PageSize = 10
-		if len(pairList) <= 0 {
-			switch in.PumpStatus {
-			case constants.PumpStatusNewCreation:
-				pairList, err = pairModel.FindLatestPumpLimit(l.ctx, in.PageNo, in.PageSize)
-			case constants.PumpStatusCompleting:
-				pairList, err = pairModel.FindLatestCompletingPumpLimit(l.ctx, in.PageNo, in.PageSize)
-			case constants.PumpStatusCompleted:
-				pairList, err = pairModel.FindLatestCompletePumpLimit(l.ctx, in.PageNo, in.PageSize)
-			}
-
-			if err != nil {
-				return nil, err
-			}
-			if len(pairList) == 0 {
-				return &market.GetPumpTokenListResponse{
-					List:  []*market.PumpTokenItem{},
-					Total: 0,
-				}, nil
-			}
-		}
-
-		tokanAddresses := make([]string, 0)
-		for _, pair := range pairList {
-			if pair.TokenAddress != "" {
-				tokanAddresses = append(tokanAddresses, pair.TokenAddress)
-			}
-		}
-
-		tokenModel := solmodel.NewTokenModel(l.svcCtx.DB)
-		tokenList, err := tokenModel.FindAllByAddresses(l.ctx, in.ChainId, tokanAddresses)
-		if err != nil {
-			fmt.Println("FindAllByAddresses:", err)
-			return nil, err
-		}
-
-		tokenMap := make(map[string]*solmodel.Token)
-		for _, token := range tokenList {
-			tokenMap[token.Address] = &token
-		}
-		tokenHolderMap := FetchHolderCounts(l.ctx, l.svcCtx.DB, in.ChainId, tokanAddresses, tokenMap)
-
-		pairAddresses := make([]string, 0, len(pairList))
-		for _, pair := range pairList {
-			pairAddresses = append(pairAddresses, pair.Address)
-		}
-		statsMap, err := Fetch24hStats(l.ctx, l.svcCtx.DB, in.ChainId, pairAddresses)
-		if err != nil {
-			// Non-fatal: still return the list with zeroed 24h stats rather
-			// than failing the whole request over a stats-only aggregation.
-			logx.Errorf("GetPumpTokenList: fetch24hStats failed: %v", err)
-			statsMap = map[string]PumpToken24hStats{}
-		}
-
-		list := make([]*market.PumpTokenItem, 0)
-		for _, pair := range pairList {
-			token := tokenMap[pair.TokenAddress]
-			var tokenIcon, twitterUsername, telegram string
-			if token != nil {
-				tokenIcon = token.Icon
-				twitterUsername = token.TwitterUsername
-				telegram = token.Telegram
-			}
-			// pair.Name carries the trading source ("PumpFun"/"PumpMeteora"/
-			// "PumpMeteoraV2"), set by the consumer's per-program decoder. This is
-			// NOT token.Program, which is the SPL token program (Token/Token-2022)
-			// the mint itself uses — a different axis entirely.
-			program := pair.Name
-
-			item := &market.PumpTokenItem{
-				ChainId:          pair.ChainId,
-				ChainIcon:        chain.ChainId2ChainIcon(in.ChainId),
-				TokenAddress:     pair.TokenAddress,
-				PairAddress:      pair.Address,
-				TokenIcon:        tokenIcon,
-				TokenName:        pair.TokenSymbol,
-				LaunchTime:       pair.BlockTime.Unix(),
-				MktCap:           pair.Fdv,
-				HoldCount:        tokenHolderMap[pair.TokenAddress],
-				DomesticProgress: pair.PumpPoint,
-				TwitterUsername:  twitterUsername,
-				Telegram:         telegram,
-				Program:          program,
-			}
-
-			if stats, ok := statsMap[pair.Address]; ok {
-				item.Txs_24H = stats.Txs
-				item.Vol_24H = stats.Vol
-				item.Price = stats.LastPrice
-				if stats.FirstPrice > 0 {
-					item.Change24 = (stats.LastPrice - stats.FirstPrice) / stats.FirstPrice * 100
-				}
-			}
-
-			list = append(list, item)
-		}
-
-		fmt.Println("list:", list)
-
-		// cache the list in redismodel
-		listData, err := json.Marshal(list)
-		if err != nil {
-			logx.Errorf("Failed to marshal list: %v", err)
-			return nil, err
-		}
-
-		err = redisClient.Set(pairCacheKey, string(listData))
-		if err != nil {
-			logx.Errorf("Failed to set list in Redis: %v", err)
-			return nil, err
-		}
-
-		// DEL pump-token-list-2
-		err = redisClient.Expire(pairCacheKey, 5) // 5 seconds for development
-		if err != nil {
-			logx.Errorf("Failed to set expiration for list in Redis: %v", err)
-			return nil, err
-		}
-
-		return &market.GetPumpTokenListResponse{
-			List:        list,
-			Total:       50,
-			SolPriceUsd: solPriceUsd,
-		}, nil
+	page, size := in.PageNo, in.PageSize
+	if page < 1 {
+		page = 1
 	}
+	if size < 1 {
+		size = 50
+	}
+	if size > 100 {
+		size = 100
+	}
+	key := PumpListCacheKey(in.ChainId, in.PumpStatus, page, size, in.TokenAddress)
+	if cached, err := l.svcCtx.RDS.Get(key); err == nil && cached != "" {
+		var res market.GetPumpTokenListResponse
+		if json.Unmarshal([]byte(cached), &res) == nil {
+			return &res, nil
+		}
+	}
+	query := l.svcCtx.DB.WithContext(l.ctx).Model(&solmodel.Pair{}).Where("chain_id = ?", in.ChainId)
+	if in.TokenAddress != "" {
+		query = query.Where("token_address = ?", in.TokenAddress)
+	} else {
+		query = query.Where("name IN ?", pkgconstants.BondingCurveSources)
+		switch in.PumpStatus {
+		case constants.PumpStatusNewCreation:
+			query = query.Where("pump_status < 2 AND pump_point < ?", 0.8)
+		case constants.PumpStatusCompleting:
+			query = query.Where("pump_status < 2 AND pump_point >= ?", 0.8)
+		case constants.PumpStatusCompleted:
+			query = query.Where("pump_status >= 2")
+		default:
+			return nil, fmt.Errorf("invalid pump status: %d", in.PumpStatus)
+		}
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, err
+	}
+	var pairs []solmodel.Pair
+	if err := query.Order("block_num DESC").Offset(int((page - 1) * size)).Limit(int(size)).Find(&pairs).Error; err != nil {
+		return nil, err
+	}
+	// Preserve the existing diagnostic added locally before this change.
+	for _, pair := range pairs {
+		fmt.Println("PROBE_PAIR_NAME addr=", pair.Address, "name=", pair.Name, "tokenSymbol=", pair.TokenSymbol)
+	}
+	items, err := LoadPumpTokenItems(l.ctx, l.svcCtx.DB, in.ChainId, pairs)
+	if err != nil {
+		return nil, err
+	}
+	res := &market.GetPumpTokenListResponse{List: items, Total: int32(total), SolPriceUsd: solprice.GetSolUsdPrice()}
+	if data, err := json.Marshal(res); err == nil {
+		_ = l.svcCtx.RDS.Setex(key, string(data), 5)
+	}
+	return res, nil
 }

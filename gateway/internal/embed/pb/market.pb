@@ -1,5 +1,5 @@
 
-¡¹
+é¹
 market.protomarket"‡
 Kline
 chain_id (RchainId
@@ -147,8 +147,9 @@ hold_count (R	holdCount
 top_holder (R	topHolder
 	liquidity (R	liquidity
 	freezable (R	freezable
-mintable (Rmintable"Õ
-GetPumpTokenListRequest
+mintable (Rmintable"ú
+GetPumpTokenListRequest#
+token_address (	RtokenAddress
 chain_id (RchainId
 pump_status (R
 pumpStatus
@@ -160,8 +161,9 @@ sortedType'
 GetPumpTokenListResponse)
 list (2.market.PumpTokenItemRlist
 total (Rtotal"
-sol_price_usd (RsolPriceUsd"š
-PumpTokenItem
+sol_price_usd (RsolPriceUsd"½
+PumpTokenItem!
+token_symbol (	RtokenSymbol
 chain_id (RchainId
 
 chain_icon (	R	chainIcon#
