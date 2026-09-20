@@ -1,5 +1,83 @@
 # TODO
 
+## Priority order (per explicit user direction, 2026-09-20)
+
+1. **Buying a real token must work, and the kline chart must update from it.**
+   This is the critical path — without it nothing downstream (trailing
+   stop, double-out, Portfolio) can be verified as actually working.
+2. **Liquidity** (add liquidity to a CLMM pool) — important, second priority.
+3. Everything else in this file.
+
+## Still open — needs live testing against a REAL (not seeded) token/pool
+
+- **Buy/sell end-to-end, with the kline updating**: the actual instruction
+  bug is fixed (buy_v2/sell_v2 swap, see below) and the gateway routes/
+  auth-whitelist gaps are fixed, but this has NOT yet been confirmed working
+  live end-to-end (create a real token → buy it → watch the candle appear).
+  This is the single most important thing to verify next.
+- **Add Liquidity 515 error**: selecting a real pool (e.g. SOL/SCAT) now
+  correctly populates the form (field-mapping bug fixed), but submitting
+  returns `Error 515: An error occurred in the backend service`. Not yet
+  root-caused — needs a look at `AddLiquidityV1`'s logic with a pool that
+  has a real on-chain account (the old seeded CLMM pools likely don't).
+- **Pool creation "signature has invalid length"**: investigated deeply this
+  round. Pulled the actual unsigned transaction bytes the backend returned
+  for a real request and verified byte-by-byte that the compact-u16
+  signature count, the 64-byte placeholder signature slot, the message
+  header (numRequiredSignatures/numReadonlySigned/numReadonlyUnsigned) and
+  the account count are all internally consistent (14 accounts, 1 signer,
+  8 readonly — as expected for the exact instruction set built). Replicated
+  the browser's exact steps in Node — `Transaction.from()`, `partialSign()`
+  with a real keypair, `.serialize()` — and it succeeded cleanly. This rules
+  out the backend and rules out `@solana/web3.js` itself; the bug is almost
+  certainly in how a specific browser wallet extension's own
+  `signTransaction`/`signAndSendTransaction` handles this transaction shape
+  (the reference site has the identical signing code and, as far as we
+  found, the identical bug). Not resolved — would need testing across
+  different wallets (Phantom vs Solflare vs Backpack) to isolate which one
+  chokes and why.
+- **Portfolio token name showing as a truncated address**: root-caused —
+  Portfolio.js (from the reference) does a pure client-side wallet scan and
+  only labels tokens via `/v1/market/index_pump`'s list, which never
+  includes a plain SPL mint (no bonding-curve pair) and lags for a
+  freshly-created PumpMeteora token. Fixed by also merging in
+  `/v1/market/user_tokens` (backed by `record_user_asset`, recorded at
+  creation time with the real name) as a second metadata source. Not yet
+  confirmed live.
+
+## Done this round, continued (2026-09-20, later)
+
+- **Gateway auth-whitelist gap**: `create_trailing_stop`, `cancel_order`,
+  `query_current_orders` 404'd, then 401'd once routed — a separate
+  lowercase `whitelist.path` list (distinct from the route `Mappings`)
+  requires a JWT for anything not listed, and this project has no login
+  system. Added all three; Open Orders should now actually load instead of
+  showing "unavailable".
+- **Portfolio recording restored**: `record_user_asset` was called nowhere
+  in the current frontend — lost in the earlier wholesale frontend
+  replacement. Restored for all three token-creation paths and pool
+  creation, and Portfolio.js now also reads it back for token names/icons.
+- **Fragile transaction-sending pattern**: `TokenCreation.js`, `
+  PoolCreation.js`, `AddLiquidity.js` all manually called `signTransaction()`
+  then re-serialized and `sendRawTransaction()`'d the result, instead of the
+  wallet adapter's own `sendTransaction()`. Switched all three (did not
+  resolve the pool-creation signature bug — see "Still open" above — but is
+  the more correct pattern regardless, and may fix it for some wallets).
+- **PoolCreation.js debug-info panel removed** from the UI (same fix
+  applied to AddLiquidityHeader.js earlier, missed here).
+- **Bonding-curve progress could show over 100%** (seed data has corrupted
+  `pump_point` values on some old tokens) — the width bar was already
+  clamped, the number next to it wasn't. Clamped.
+- **"No chart data available" now renders inside the chart canvas** as a
+  centered 🌱 placeholder instead of a page-level banner that pushed the
+  stats below it out of place.
+- **AddLiquidityHeader was the only fully light-themed (white background)
+  component left** — a stale, pre-dark-theme stylesheet. Re-themed to the
+  app's dark trader-terminal palette.
+- **"↕️ Switch" button was rendering broken**: a 40px circular button
+  can't fit an emoji plus the word "Switch". Now shows just the icon, with
+  the label moved to a tooltip/aria-label.
+
 ## Backend deep-merge with devnet-branch trading features (2026-09-20)
 
 Per explicit direction ("深度整合...主要以功能多的为主也就是devnet"), merged the

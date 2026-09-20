@@ -537,6 +537,10 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
     fetchKlineData(newInterval);
   };
 
+  // Expected state for a token with no candles yet (real or otherwise) — shown
+  // inside the chart canvas itself, not as a page-level error banner.
+  const isNoDataError = error === 'No chart data available for this token';
+
   if (!visible) return null;
 
   return (
@@ -609,9 +613,9 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         </div>
       </div>
 
-      {error && (
+      {error && !isNoDataError && (
         <div className="chart-error">
-          <span>{error === 'No chart data available for this token' ? '🌱' : '⚠️'} {error}</span>
+          <span>⚠️ {error}</span>
           <button onClick={() => fetchKlineData(interval)}>Retry</button>
         </div>
       )}
@@ -634,6 +638,28 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
             opacity: isLoading ? 0.6 : 1,
           }}
         />
+
+        {isNoDataError && !isLoading && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              pointerEvents: 'none',
+              color: '#9aa',
+              fontSize: 13,
+              textAlign: 'center',
+              padding: '0 16px',
+            }}
+          >
+            <div style={{ fontSize: 32 }}>🌱</div>
+            <div>No chart data available for this token</div>
+          </div>
+        )}
 
         {clickInfo && (() => {
           const { candle, prevClose } = clickInfo;

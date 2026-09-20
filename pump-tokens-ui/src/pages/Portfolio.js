@@ -7,7 +7,7 @@ import { shortAddr } from '../lib/trade';
 const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
 
-async function tokenMetaMap() {
+async function tokenMetaMap(walletAddress) {
   const map = {};
   await Promise.all(
     [1, 2, 4].map((st) =>
@@ -17,6 +17,27 @@ async function tokenMetaMap() {
         .catch(() => {})
     )
   );
+  // Tokens recorded at creation time (record_user_asset) — the source of
+  // truth for a token's real name/symbol regardless of whether the consumer
+  // has indexed it yet, and the only source at all for a plain SPL mint
+  // (index_pump only lists bonding-curve/pump tokens, which have a pair
+  // record; a plain mint never gets one, so it would otherwise always fall
+  // back to a truncated address instead of its real name).
+  if (walletAddress) {
+    await fetch(`/v1/market/user_tokens?chain_id=100000&wallet_address=${walletAddress}`)
+      .then((r) => r.json())
+      .then((d) =>
+        (d?.data?.list || []).forEach((t) => {
+          map[t.tokenAddress] = {
+            ...map[t.tokenAddress],
+            tokenName: t.tokenName,
+            tokenSymbol: t.tokenSymbol,
+            tokenIcon: map[t.tokenAddress]?.tokenIcon || t.tokenIcon,
+          };
+        })
+      )
+      .catch(() => {});
+  }
   return map;
 }
 
@@ -35,7 +56,7 @@ export default function Portfolio() {
         connection.getBalance(publicKey),
         connection.getParsedTokenAccountsByOwner(publicKey, { programId: TOKEN_PROGRAM_ID }),
         connection.getParsedTokenAccountsByOwner(publicKey, { programId: TOKEN_2022_PROGRAM_ID }).catch(() => ({ value: [] })),
-        tokenMetaMap(),
+        tokenMetaMap(publicKey.toString()),
       ]);
       setSol(bal / 1e9);
       const list = [...respStd.value, ...resp22.value]

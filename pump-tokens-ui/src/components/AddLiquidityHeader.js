@@ -568,11 +568,13 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
                 />
               </div>
               
-              <button 
+              <button
                 className="swap-button"
                 onClick={switchInputToken}
+                aria-label="Switch input token"
+                title="Switch input token"
               >
-                ↕️ Switch
+                ↕️
               </button>
               
               <div className="token-input">
