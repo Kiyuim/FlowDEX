@@ -32,13 +32,15 @@ func (tm *TxManager) CreateGasAndJitoByGasFee(ctx context.Context, isAntiMev boo
 		}
 		instructions = append(instructions, instructionNew)
 
-		// #2 - Compute Budget: SetComputeUnitLimit
-		instructionNew, err = computebudget.NewSetComputeUnitLimitInstruction(cuLimit).ValidateAndBuild()
-		if nil != err {
-			return nil, 0, err
-		}
-		instructions = append(instructions, instructionNew)
 	}
+	// Always set the limit, including normal/test gas modes. Without an
+	// explicit limit Solana may apply a much smaller per-instruction budget;
+	// Pump BuyV2 then fails at exactly the compute meter despite valid accounts.
+	instructionNew, err = computebudget.NewSetComputeUnitLimitInstruction(cuLimit).ValidateAndBuild()
+	if nil != err {
+		return nil, 0, err
+	}
+	instructions = append(instructions, instructionNew)
 
 	// Comment out jito transfer instruction
 	// if isAntiMev {

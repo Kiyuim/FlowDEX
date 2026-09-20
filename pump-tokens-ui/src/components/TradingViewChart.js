@@ -22,6 +22,17 @@ function upsertCandle(series, candle) {
   return [...series, candle].sort((a, b) => a.time - b.time);
 }
 
+// lightweight-charts uses Unix seconds for intraday data and a BusinessDay
+// object for daily/weekly data. Keep both paths in the viewer's local zone so
+// changing the interval cannot produce an offset or an invalid x-axis.
+function chartTimeToDate(time) {
+  if (typeof time === 'number') return new Date(time * 1000);
+  if (time && typeof time === 'object' && time.year && time.month && time.day) {
+    return new Date(time.year, time.month - 1, time.day);
+  }
+  return new Date(NaN);
+}
+
 const TradingViewChart = ({ token, visible = true, mockMode = false, refreshKey = 0 }) => {
   const chartContainerRef = useRef();
   const chartRef = useRef();
@@ -70,14 +81,14 @@ const TradingViewChart = ({ token, visible = true, mockMode = false, refreshKey 
         // viewer's local zone instead of shifting the data (which would
         // break the click-info card's own time and the WS upserts).
         localization: {
-          timeFormatter: (t) => new Date(t * 1000).toLocaleString(),
+          timeFormatter: (t) => chartTimeToDate(t).toLocaleString(),
         },
         timeScale: {
           borderColor: '#485c7b',
           timeVisible: true,
           secondsVisible: false,
           tickMarkFormatter: (t, tickType) => {
-            const d = new Date(t * 1000);
+            const d = chartTimeToDate(t);
             // tickType: 0 year, 1 month, 2 day-of-month, 3 time, 4 time+seconds
             if (tickType === 0) return String(d.getFullYear());
             if (tickType === 1) return d.toLocaleDateString(undefined, { month: 'short' });
@@ -319,6 +330,9 @@ const TradingViewChart = ({ token, visible = true, mockMode = false, refreshKey 
         ws.onopen = () => {
           console.log('WebSocket connected for kline updates');
           setWsConnection(ws);
+          // Pull the current candle immediately after reconnecting. This
+          // closes the gap while Redis/WebSocket delivery is recovering.
+          fetchKlineData(interval, true);
         };
 
         ws.onmessage = (event) => {
@@ -588,7 +602,9 @@ const TradingViewChart = ({ token, visible = true, mockMode = false, refreshKey 
     setClickInfo(null);
     if (token?.pairAddress && visible) {
       fetchKlineData(interval);
-      const timer = window.setInterval(() => fetchKlineData(interval, true), 15000);
+      // WebSocket is the low-latency path; keep a short polling safety net so
+      // a dropped Redis subscription never leaves the chart visibly stale.
+      const timer = window.setInterval(() => fetchKlineData(interval, true), 5000);
       return () => { window.clearInterval(timer); ++fetchGeneration.current; pendingFetch.current?.abort(); pendingFetch.current = null; };
     }
   }, [token?.pairAddress, interval, visible, refreshKey]);
@@ -786,4 +802,4 @@ const TradingViewChart = ({ token, visible = true, mockMode = false, refreshKey 
   );
 };
 
-export default TradingViewChart; 
+export default TradingViewChart;

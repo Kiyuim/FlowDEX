@@ -132,19 +132,19 @@ func (m customPairModel) FindOneByChainIdTokenAddress(ctx context.Context, chain
 
 func (m customPairModel) FindLatestPumpLimit(ctx context.Context, pageNum, pageSize int32) ([]Pair, error) {
 	resp := make([]Pair, 0)
-	err := m.conn.WithContext(ctx).Model(&Pair{}).Where("name IN ?", constants.BondingCurveSources).Order("block_num desc").Offset(int((pageNum - 1) * pageSize)).Limit(int(pageSize)).Find(&resp).Error
+	err := m.conn.WithContext(ctx).Model(&Pair{}).Where("name IN ? AND NOT (name = ? AND token_symbol = '')", constants.BondingCurveSources, constants.PumpFun).Order("block_num desc").Offset(int((pageNum - 1) * pageSize)).Limit(int(pageSize)).Find(&resp).Error
 	return resp, err
 }
 
 func (m customPairModel) FindLatestCompletingPumpLimit(ctx context.Context, pageNum, pageSize int32) ([]Pair, error) {
 	resp := make([]Pair, 0)
-	err := m.conn.WithContext(ctx).Model(&Pair{}).Where("name IN ? and pump_status = 1", constants.BondingCurveSources).Order("created_at  desc").Offset(int((pageNum - 1) * pageSize)).Limit(int(pageSize)).Find(&resp).Error
+	err := m.conn.WithContext(ctx).Model(&Pair{}).Where("name IN ? AND pump_status = 1 AND NOT (name = ? AND token_symbol = '')", constants.BondingCurveSources, constants.PumpFun).Order("created_at  desc").Offset(int((pageNum - 1) * pageSize)).Limit(int(pageSize)).Find(&resp).Error
 	return resp, err
 }
 
 func (m customPairModel) FindLatestCompletePumpLimit(ctx context.Context, pageNum, pageSize int32) ([]Pair, error) {
 	resp := make([]Pair, 0)
-	err := m.conn.WithContext(ctx).Model(&Pair{}).Where("name IN ? and pump_status = 2", constants.BondingCurveSources).Order("block_num desc").Offset(int((pageNum - 1) * pageSize)).Limit(int(pageSize)).Find(&resp).Error
+	err := m.conn.WithContext(ctx).Model(&Pair{}).Where("name IN ? AND pump_status = 2 AND NOT (name = ? AND token_symbol = '')", constants.BondingCurveSources, constants.PumpFun).Order("block_num desc").Offset(int((pageNum - 1) * pageSize)).Limit(int(pageSize)).Find(&resp).Error
 	fmt.Println("FindLatestCompletePumpLimit:", resp)
 	return resp, err
 }

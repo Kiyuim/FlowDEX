@@ -9,8 +9,11 @@ import (
 const (
 	FeeReceiver = "77r1L6TyggUhwFkk3wFrMMkYS7xK6xJu78wuzMjr2PHZ"
 
-	RaydiumV4SwapCU   = 150_000
-	PumpFunSwapCU     = 100_000
+	RaydiumV4SwapCU = 150_000
+	// BuyV2 creates/initializes several accounts and can exceed the old
+	// 100k limit. Keep headroom for the associated-token and volume-account
+	// instructions included in the client-signed transaction.
+	PumpFunSwapCU     = 300_000
 	RaydiumClmmSwapCu = 250_000
 	RaydiumCpmmSwapCu = 150_000
 	PumpSwapCU        = 150_000

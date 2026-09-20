@@ -21,6 +21,12 @@
 
 ## Still open
 
+- BuyV2 compute-budget failure was traced to the old 100k CU limit; the
+  transaction builder now requests 300k CU and always emits the limit
+  instruction. K-line charts also use a 5-second polling safety net in
+  addition to the WebSocket, and recent Meteora sell prices use execution
+  amounts rather than the post-trade reserve ratio.
+
 - Automatic follow-up sells for double-out/trailing-stop still require an SPL
   delegate approval transaction signed by the user's wallet. The reference
   devnet repository has the same server-side behavior and no completed
@@ -553,13 +559,18 @@ candles. Traced the whole pipeline end to end:
   updates. This fully explains "kline isn't real-time" without requiring
   any backend or pipeline fix.
 
-**Action needed (user-side, can't be done from this session — no Vercel
-CLI/token available)**: in the Vercel project's dashboard → Settings →
-Environment Variables, add:
+The production websocket variables are configured in Vercel:
 - `REACT_APP_KLINE_WS_URL=wss://websocket-production-4109.up.railway.app`
 - `REACT_APP_WS_URL=wss://websocket-production-4109.up.railway.app` (same
   service, used by the token-list live feed — same missing-var symptom)
 
-then redeploy. (Confirmed `websocket-production-4109.up.railway.app` is the
+**Updated 2026-09-20:** Vercel CLI access is now available and the production
+deployment was verified as Ready and aliased to `flow-dex-alpha.vercel.app`.
+Both websocket variables are present in the project configuration and the
+live bundle contains the configured Railway websocket origin; the old action
+item above is complete.
+
+The variables were then included in the Ready production build. (Confirmed
+`websocket-production-4109.up.railway.app` is the
 live public domain for the `websocket` Railway service via `railway
 status --json`.)
