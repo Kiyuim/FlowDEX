@@ -96,7 +96,10 @@ export default function TokenDetail() {
   const priceStr = (p) => (p == null ? '—' : p < 0.001 ? `$${p.toExponential(2)}` : `$${p.toFixed(6)}`);
   // Prefer the same indexed market data used by Discovery; direct RPC trades
   // are only a recent sample, not the full 24-hour volume.
-  const displayPrice = finiteNumber(token?.price) || stats?.price || (curveState?.mint === mint ? curveState.priceUsd : null) || null;
+  // The indexed token price can trail the chain by several minutes while the
+  // consumer catches up. Prefer the newest direct-chain trade so the header,
+  // chart context, and limit panel all show the same current price.
+  const displayPrice = finiteNumber(stats?.price) ?? finiteNumber(token?.price) ?? (curveState?.mint === mint ? curveState.priceUsd : null) ?? null;
   const displayVolume = finiteNumber(token?.vol24h);
   const displayChange = finiteNumber(token?.change24);
   const currentCurve = curveState?.mint === mint ? curveState : null;

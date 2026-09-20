@@ -33,6 +33,9 @@
 - Token detail now passes the same resolved header price into the limit-order
   panel, so its `now` value cannot disagree with the displayed Price because
   one used stale indexed metadata and the other used a newer RPC trade.
+- The header now also prefers the newest direct-chain trade over stale indexed
+  `token.price`, keeping Price, Recent trades, and limit `now` aligned while
+  the consumer is behind.
 - K-line now merges the direct on-chain trade stream into the visible candles,
   so the latest trades appear immediately even while the Railway consumer is
   catching up.

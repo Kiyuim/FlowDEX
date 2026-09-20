@@ -7,6 +7,14 @@ const REQ_DELAY_MS = 250;
 const RATE_LIMIT_COOLDOWN_MS = 60000;
 const MAX_NEW_PER_POLL = 15; // cap RPC calls per poll; the rest catch up next poll
 
+function curveCandidates(mint) {
+  return [
+    { curve: deriveBondingCurve(mint), parse: parsePumpEventLog },
+    { curve: deriveMeteoraBondingCurve(mint, METEORA_PROGRAMS.meteora), parse: parseMeteoraSwapEventLog },
+    { curve: deriveMeteoraBondingCurve(mint, METEORA_PROGRAMS.meteorav2), parse: parseMeteoraSwapEventLog },
+  ];
+}
+
 // Reconstructs recent trades for a bonding-curve token directly from the chain:
 // fetch the curve's recent signatures, parse the pump vdt/007m event from each.
 // Returns trades newest-first. Shared by the chart and the trades feed so they
@@ -37,11 +45,7 @@ export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000
       // Source-aware: try pump.fun's curve first (the common case), then both
       // pump-meteora builds. Whichever program's curve account actually has
       // signatures is this token's real source.
-      const candidates = [
-        { curve: deriveBondingCurve(mint), parse: parsePumpEventLog },
-        { curve: deriveMeteoraBondingCurve(mint, METEORA_PROGRAMS.meteora), parse: parseMeteoraSwapEventLog },
-        { curve: deriveMeteoraBondingCurve(mint, METEORA_PROGRAMS.meteorav2), parse: parseMeteoraSwapEventLog },
-      ];
+      const candidates = curveCandidates(mint);
       let curve, parseEvent, sigs = [];
       for (const c of candidates) {
         const s = await connection.getSignaturesForAddress(c.curve, { limit });
@@ -112,6 +116,56 @@ export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000
       // partial progress is kept in the cache; next poll resumes where we left off
       setStatus((s) => (s === 'ok' ? 'ok' : 'error'));
     }
+  }, [connection, mint, limit]);
+
+  // Subscribe directly to the curve accounts. This is the low-latency path:
+  // Solana emits the transaction logs immediately, while the historical
+  // signature poll and Railway consumer can trail by minutes under load.
+  useEffect(() => {
+    if (!mint || !connection?.onLogs) return undefined;
+    let cancelled = false;
+    const subscriptions = [];
+    const subscribe = async () => {
+      for (const { curve, parse } of curveCandidates(mint)) {
+        try {
+          const id = await connection.onLogs(curve, (logInfo) => {
+            if (cancelled || logInfo?.err || !logInfo?.logs) return;
+            const events = logInfo.logs
+              .map((log) => parse(log))
+              .filter(Boolean)
+              .map((event) => ({ ...event, time: Math.floor(Date.now() / 1000), sig: logInfo.signature }));
+            if (!events.length) return;
+            const cache = cacheRef.current;
+            if (cache.mint !== mint) return;
+            cache.bySig.set(logInfo.signature, events);
+            setTrades((previous) => {
+              const seen = new Set();
+              return [...events, ...previous]
+                .filter((trade) => {
+                  const key = `${trade.sig}:${trade.time}:${trade.priceUsd}:${trade.tokenAmount}`;
+                  if (seen.has(key)) return false;
+                  seen.add(key);
+                  return true;
+                })
+                .sort((a, b) => b.time - a.time)
+                .slice(0, limit);
+            });
+            setStatus('ok');
+          }, 'confirmed');
+          if (!cancelled) subscriptions.push(id);
+          else await connection.removeOnLogsListener(id);
+        } catch (e) {
+          // Some public RPC endpoints disable logsSubscribe. The existing
+          // signature polling remains the fallback in that case.
+          console.warn('curve logs subscription unavailable', e);
+        }
+      }
+    };
+    subscribe();
+    return () => {
+      cancelled = true;
+      for (const id of subscriptions) connection.removeOnLogsListener(id).catch(() => {});
+    };
   }, [connection, mint, limit]);
 
   useEffect(() => {
