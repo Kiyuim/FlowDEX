@@ -248,7 +248,7 @@ func decodeMeteoraOptCreate(dtx *DecodedTx, instruction *solTypes.CompiledInstru
 	trade.PumpLaunched = false
 	trade.PumpPoint = 0
 	trade.PumpPairAddr = pair
-	trade.PumpStatus = pump.PumpStatusCreate
+	trade.PumpStatus = pump.PumpStatusTrading // a fresh curve is tradable at once; -1 would hide it from the "new" list
 
 	logx.Infof("METEORA-OPT OK create token=%v curve=%v hash=%v", mint, pair, dtx.TxHash)
 	return trade, nil
