@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
-import { useConnection } from '@solana/wallet-adapter-react';
+import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import TradingViewChart from '../components/TradingViewChart';
 import RecentTrades from '../components/RecentTrades';
 import TradePanel from '../components/TradePanel';
@@ -20,7 +20,7 @@ function Stat({ label, value }) {
   );
 }
 
-async function fetchTokenByMint(mint) {
+async function fetchTokenByMint(mint, walletAddress) {
   for (const st of [1, 2, 4]) {
     try {
       const r = await fetch(
@@ -31,12 +31,34 @@ async function fetchTokenByMint(mint) {
       if (found) return found;
     } catch {}
   }
+  // Not indexed yet — if it's one of your own created tokens, its real
+  // name/symbol/icon is already recorded (record_user_asset at creation
+  // time), independent of indexing. Covers navigating here directly
+  // (pasted link, Sources page) rather than via Portfolio's own list,
+  // which already carries this in router state.
+  if (walletAddress) {
+    try {
+      const r = await fetch(`/v1/market/user_tokens?chain_id=100000&wallet_address=${walletAddress}`);
+      const d = (await r.json())?.data?.list || [];
+      const found = d.find((t) => t.tokenAddress === mint);
+      if (found) {
+        return {
+          tokenAddress: found.tokenAddress,
+          tokenName: found.tokenName,
+          tokenSymbol: found.tokenSymbol,
+          tokenIcon: found.tokenIcon,
+          pairAddress: mint, // real one recovered by readCurveState separately
+        };
+      }
+    } catch {}
+  }
   return null;
 }
 
 export default function TokenDetail() {
   const { mint } = useParams();
   const location = useLocation();
+  const { publicKey } = useWallet();
   const [token, setToken] = useState(location.state?.token || null);
   const [loading, setLoading] = useState(!location.state?.token);
   // The candle chart (TradingViewChart) is the only price chart. `trades` (raw
@@ -109,7 +131,7 @@ export default function TokenDetail() {
     // Don't block the UI with a spinner if we already have something to
     // show from nav state though.
     if (!token || token.tokenAddress !== mint) setLoading(true);
-    fetchTokenByMint(mint).then((t) => {
+    fetchTokenByMint(mint, publicKey?.toString()).then((t) => {
       if (!alive) return;
       setToken((prev) => {
         if (t) return t; // indexed data is always the most complete
@@ -125,7 +147,7 @@ export default function TokenDetail() {
     return () => {
       alive = false;
     };
-  }, [mint]); // eslint-disable-line
+  }, [mint, publicKey]); // eslint-disable-line
 
   const fmt = (v, d = 2) =>
     v == null || v === '' ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: d });
