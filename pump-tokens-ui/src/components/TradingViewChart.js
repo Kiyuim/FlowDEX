@@ -33,42 +33,154 @@ function chartTimeToDate(time) {
   return new Date(NaN);
 }
 
+// Fills any missing candle gaps between consecutive candles and up to the current bucket.
+// Flat continuation candles have open = high = low = close = previous close, and volume = 0.
+function fillCandleGaps(candles, intervalSeconds, maxBars = 300) {
+  if (!candles || candles.length === 0) return [];
+  const sorted = [...candles].sort((a, b) => a.time - b.time);
+  const now = Math.floor(Date.now() / 1000);
+  const currentBucket = Math.floor(now / intervalSeconds) * intervalSeconds;
+
+  const filled = [];
+  let prev = null;
+
+  for (const c of sorted) {
+    if (prev) {
+      let gapTime = prev.time + intervalSeconds;
+      const gapCount = Math.floor((c.time - gapTime) / intervalSeconds);
+      if (gapCount > 0 && gapCount <= maxBars) {
+        while (gapTime < c.time) {
+          filled.push({
+            time: gapTime,
+            open: prev.close,
+            high: prev.close,
+            low: prev.close,
+            close: prev.close,
+            volume: 0,
+          });
+          gapTime += intervalSeconds;
+        }
+      }
+    }
+    filled.push(c);
+    prev = c;
+  }
+
+  // Extend flat candles up to the current time bucket so K-lines never have discontinuous gaps
+  if (prev && prev.time < currentBucket) {
+    let gapTime = prev.time + intervalSeconds;
+    const gapCount = Math.floor((currentBucket - gapTime) / intervalSeconds);
+    if (gapCount >= 0 && gapCount <= maxBars) {
+      while (gapTime <= currentBucket) {
+        filled.push({
+          time: gapTime,
+          open: prev.close,
+          high: prev.close,
+          low: prev.close,
+          close: prev.close,
+          volume: 0,
+        });
+        gapTime += intervalSeconds;
+      }
+    }
+  }
+
+  return filled.slice(-maxBars);
+}
+
+// Sequentially updates candlestickSeries so no intermediate or gap-filled candles are skipped,
+// while preserving lightweight-charts zoom/pan state and animating wicks smoothly.
+function applyCandleUpdates(candlestickSeries, oldData, newData) {
+  if (!candlestickSeries || !newData || newData.length === 0) return;
+  if (!oldData || oldData.length === 0) {
+    candlestickSeries.setData(newData);
+    return;
+  }
+  const oldLastTime = oldData[oldData.length - 1].time;
+  const newFirstTime = newData[0].time;
+
+  // If time jumped backwards or interval changed, reload with setData
+  if (newFirstTime > oldLastTime || newData.length < oldData.length / 2) {
+    candlestickSeries.setData(newData);
+    return;
+  }
+
+  const pendingBars = newData.filter((b) => b.time >= oldLastTime);
+  if (pendingBars.length === 0) {
+    candlestickSeries.setData(newData);
+    return;
+  }
+
+  try {
+    for (const bar of pendingBars) {
+      candlestickSeries.update(bar);
+    }
+  } catch (err) {
+    console.warn('applyCandleUpdates fallback to setData:', err);
+    candlestickSeries.setData(newData);
+  }
+}
+
 function mergeLiveTradeCandles(base, trades, interval) {
   const intervalSeconds = {
     '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400,
   }[interval] || 3600;
-  const merged = base.slice();
+  const merged = (base || []).map((c) => ({ ...c }));
+
+  // Sort trades chronologically (oldest to newest) to build accurate OHLC bars
+  const sortedTrades = (trades || [])
+    .filter((t) => {
+      const time = Number(t.time);
+      const price = Number(t.priceUsd);
+      return Number.isFinite(time) && time > 0 && Number.isFinite(price) && price > 0;
+    })
+    .sort((a, b) => Number(a.time) - Number(b.time));
+
   const grouped = new Map();
-  for (const trade of trades || []) {
+  for (const trade of sortedTrades) {
     const time = Number(trade.time);
     const price = Number(trade.priceUsd);
-    if (!Number.isFinite(time) || time <= 0 || !Number.isFinite(price) || price <= 0) continue;
     const bucket = Math.floor(time / intervalSeconds) * intervalSeconds;
-    const row = grouped.get(bucket) || { time: bucket, open: price, high: price, low: price, close: price, first: time, last: time };
-    if (time < row.first) { row.first = time; row.open = price; }
-    if (time > row.last) { row.last = time; row.close = price; }
-    row.high = Math.max(row.high, price);
-    row.low = Math.min(row.low, price);
-    grouped.set(bucket, row);
+    const vol = Number(trade.solAmount || 0) * (trade.solPriceUsd || 150);
+    const row = grouped.get(bucket);
+    if (!row) {
+      grouped.set(bucket, {
+        time: bucket,
+        open: price,
+        high: price,
+        low: price,
+        close: price,
+        volume: vol,
+      });
+    } else {
+      row.high = Math.max(row.high, price);
+      row.low = Math.min(row.low, price);
+      row.close = price;
+      row.volume = (row.volume || 0) + vol;
+    }
   }
+
   for (const [bucket, incoming] of grouped) {
     const idx = merged.findIndex((c) => c.time === bucket);
-    if (idx < 0) merged.push(incoming);
-    else {
+    if (idx < 0) {
+      merged.push(incoming);
+    } else {
       const current = merged[idx];
       merged[idx] = {
         ...current,
         open: current.open > 0 ? current.open : incoming.open,
-        high: Math.max(current.high, incoming.high),
-        low: Math.min(current.low, incoming.low),
+        high: Math.max(current.high || 0, incoming.high),
+        low: current.low > 0 ? Math.min(current.low, incoming.low) : incoming.low,
         close: incoming.close,
+        volume: (current.volume || 0) + (incoming.volume || 0),
       };
     }
   }
-  return merged.sort((a, b) => a.time - b.time);
+  const sortedMerged = merged.sort((a, b) => a.time - b.time);
+  return fillCandleGaps(sortedMerged, intervalSeconds);
 }
 
-const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = false, refreshKey = 0 }) => {
+const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = false, refreshKey = 0, onCandleStats }) => {
   const chartContainerRef = useRef();
   const chartRef = useRef();
   const candlestickSeriesRef = useRef();
@@ -83,6 +195,21 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
   const [clickInfo, setClickInfo] = useState(null); // { x, y, candle, prevClose }
   const liveTradesRef = useRef(liveTrades);
 
+  const notifyCandleStats = (candles) => {
+    if (!candles || candles.length === 0 || !onCandleStats) return;
+    const last = candles[candles.length - 1];
+    const first = candles[0];
+    const volume = candles.reduce((sum, c) => sum + (Number(c.volume) || 0), 0);
+    const change = first.open > 0 ? ((last.close - first.open) / first.open) * 100 : 0;
+    onCandleStats({
+      price: last.close,
+      change,
+      volume,
+      high: Math.max(...candles.map((c) => c.high || c.close)),
+      low: Math.min(...candles.map((c) => c.low || c.close)),
+    });
+  };
+
   // The direct on-chain trade hook can be newer than the Railway indexer. Fold
   // those trades into the current candle so the chart does not wait for the
   // consumer to catch up before showing the last few minutes.
@@ -95,15 +222,9 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
     if (!candlestickSeriesRef.current || !liveTrades?.length) return;
     const merged = mergeLiveTradeCandles(candleDataRef.current, liveTrades, interval);
     if (!merged.length) return;
+    applyCandleUpdates(candlestickSeriesRef.current, candleDataRef.current, merged);
     candleDataRef.current = merged;
-    // Smoothly update the latest candle via .update() to paint live wicks (插针)
-    // without tearing down the entire series with setData().
-    const lastBar = merged[merged.length - 1];
-    try {
-      candlestickSeriesRef.current.update(lastBar);
-    } catch (_) {
-      candlestickSeriesRef.current.setData(merged);
-    }
+    notifyCandleStats(merged);
   }, [liveTrades, interval]);
 
   // Initialize chart
@@ -461,8 +582,14 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
 
               // Update the chart with new data, but handle timestamp ordering
               try {
-                candlestickSeriesRef.current.update(chartData);
-                candleDataRef.current = upsertCandle(candleDataRef.current, chartData);
+                const intervalSeconds = {
+                  '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400,
+                }[interval] || 3600;
+                const nextCandles = upsertCandle(candleDataRef.current, chartData);
+                const filled = fillCandleGaps(nextCandles, intervalSeconds);
+                applyCandleUpdates(candlestickSeriesRef.current, candleDataRef.current, filled);
+                candleDataRef.current = filled;
+                notifyCandleStats(filled);
                 setError('');
                 console.log('Chart updated successfully with timestamp:', chartData.time);
               } catch (updateError) {
@@ -631,17 +758,11 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
           candlestickSeriesRef.current.setData(mergedChartData);
           candleDataRef.current = mergedChartData;
         } else {
-          // In background refresh, do NOT tear down the chart with setData!
-          // Only update the latest candle to prevent wiping out live wicks (插针) or resetting crosshairs.
+          applyCandleUpdates(candlestickSeriesRef.current, candleDataRef.current, mergedChartData);
           candleDataRef.current = mergedChartData;
-          const lastPoint = mergedChartData[mergedChartData.length - 1];
-          try {
-            candlestickSeriesRef.current.update(lastPoint);
-          } catch (_) {
-            candlestickSeriesRef.current.setData(mergedChartData);
-          }
         }
         setError('');
+        notifyCandleStats(mergedChartData);
         
         // Add real-time connection status indicator
         const lastDataPoint = mergedChartData[mergedChartData.length - 1];

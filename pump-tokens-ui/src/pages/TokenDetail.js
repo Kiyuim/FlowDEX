@@ -10,6 +10,7 @@ import useBondingCurveReserves from '../hooks/useBondingCurveReserves';
 import useWatchlist from '../hooks/useWatchlist';
 import { shortAddr } from '../lib/trade';
 import { readCurveState } from '../lib/curve';
+import { deriveBondingCurve } from '../lib/pump';
 import { getSolUsd } from '../lib/solPrice';
 
 import { mergeToken, normalizeToken, tokenDisplayName, finiteNumber } from '../lib/tokenData';
@@ -23,21 +24,61 @@ function Stat({ label, value }) {
   );
 }
 
+function getFallbackPair(mint) {
+  if (!mint) return '';
+  try {
+    return deriveBondingCurve(mint).toBase58();
+  } catch {
+    return mint;
+  }
+}
+
 async function fetchTokenByMint(mint, walletAddress) {
-  const indexed = fetch(`/v1/market/index_pump?chain_id=100000&token_address=${encodeURIComponent(mint)}&pump_status=1&page_size=100`)
-    .then((r) => r.json()).then((d) => (d?.data?.list || []).map(normalizeToken).find((t) => t.tokenAddress === mint)).catch(() => null);
-  const recorded = walletAddress ? fetch(`/v1/market/user_tokens?chain_id=100000&wallet_address=${walletAddress}`)
-    .then((r) => r.json()).then((d) => (d?.data?.list || []).map(normalizeToken).find((t) => t.tokenAddress === mint)).catch(() => null) : Promise.resolve(null);
-  const [live, own] = await Promise.all([indexed, recorded]);
-  return live || own ? mergeToken(live, own) : null;
+  try {
+    const r = await fetch(
+      `/v1/market/index_pump?chain_id=100000&token_address=${encodeURIComponent(mint)}&page_size=10`
+    );
+    const d = await r.json();
+    const list = d?.data?.list || [];
+    const found = list.map(normalizeToken).find((t) => t.tokenAddress === mint);
+    if (found) return found;
+  } catch {}
+
+  if (walletAddress) {
+    try {
+      const r = await fetch(
+        `/v1/market/user_tokens?chain_id=100000&wallet_address=${encodeURIComponent(walletAddress)}`
+      );
+      const d = await r.json();
+      const list = d?.data?.list || [];
+      const found = list.map(normalizeToken).find((t) => t.tokenAddress === mint);
+      if (found) return found;
+    } catch {}
+  }
+  return null;
 }
 
 export default function TokenDetail() {
   const { mint } = useParams();
   const location = useLocation();
   const { publicKey } = useWallet();
-  const [token, setToken] = useState(location.state?.token || null);
-  const [loading, setLoading] = useState(!location.state?.token);
+  const defaultPair = useMemo(() => getFallbackPair(mint), [mint]);
+
+  const [token, setToken] = useState(() => {
+    const navToken = location.state?.token;
+    if (navToken && navToken.tokenAddress === mint) {
+      return {
+        pairAddress: navToken.pairAddress || defaultPair,
+        ...navToken,
+        tokenAddress: mint,
+      };
+    }
+    return {
+      tokenAddress: mint,
+      pairAddress: defaultPair,
+      tokenSymbol: 'TOKEN',
+    };
+  });
   // The candle chart (TradingViewChart) is the only price chart. `trades` (raw
   // on-chain trades) still feeds the stats and the RecentTrades list below.
   const { trades, status: tradesStatus, reload: reloadTrades } = useBondingCurveTrades(mint);
@@ -45,6 +86,11 @@ export default function TokenDetail() {
   const { isFav, toggle } = useWatchlist();
   const [ordersTick, setOrdersTick] = useState(0);
   const [chartRefresh, setChartRefresh] = useState(0);
+  const [candleStats, setCandleStats] = useState(null);
+
+  const handleCandleStats = useCallback((s) => {
+    if (s) setCandleStats((prev) => ({ ...prev, ...s }));
+  }, []);
 
   // Live bonding-curve state read straight from chain (source-aware: pump.fun /
   // PumpMeteora / V2). Gives a brand-new token a real STARTING price + reserves
@@ -79,14 +125,15 @@ export default function TokenDetail() {
     const cutoff = now - 86400;
     const recent = trades.filter((t) => t.time >= cutoff);
     const price = trades[0].priceUsd;
-    const vol24h = recent.reduce((s, t) => s + t.solAmount * getSolUsd(), 0);
+    const vol24h = recent.reduce((s, t) => s + (t.solAmount || 0) * getSolUsd(), 0);
     const buys24h = recent.filter((t) => t.isBuy).length;
     const traders = new Set(trades.map((t) => t.maker)).size;
     const older = trades.filter((t) => t.time < cutoff);
-    const ref = older.length ? older[0].priceUsd : recent[recent.length - 1]?.priceUsd;
-    const change = ref ? ((price - ref) / ref) * 100 : null;
+    const initialPrice = curveState?.priceUsd || (30 / 1073000000) * getSolUsd();
+    let ref = older.length ? older[0].priceUsd : (recent.length > 1 ? recent[recent.length - 1]?.priceUsd : initialPrice);
+    const change = ref && ref > 0 ? ((price - ref) / ref) * 100 : null;
     return { price, vol24h, txns24h: recent.length, buys24h, sells24h: recent.length - buys24h, traders, change };
-  }, [trades]);
+  }, [trades, curveState]);
 
   const money = (v) => {
     if (v == null) return '—';
@@ -95,41 +142,37 @@ export default function TokenDetail() {
     return `$${v.toFixed(2)}`;
   };
   const priceStr = (p) => (p == null ? '—' : p < 0.001 ? `$${p.toExponential(2)}` : `$${p.toFixed(6)}`);
-  // Prefer the same indexed market data used by Discovery; direct RPC trades
-  // are only a recent sample, not the full 24-hour volume.
-  // Real stats computed from on-chain trades (following reference fun_dex_v2-devnet).
-  const displayPrice = stats?.price ?? (curveState?.mint === mint ? curveState.priceUsd : null) ?? finiteNumber(token?.price) ?? null;
-  const displayVolume = stats?.vol24h ?? finiteNumber(token?.vol24h);
-  const displayChange = stats?.change ?? finiteNumber(token?.change24);
+  // Real-time price, volume, change, and market cap updated from on-chain trades, candle stream, or curve
+  const displayPrice = stats?.price ?? candleStats?.price ?? (curveState?.mint === mint ? curveState.priceUsd : null) ?? finiteNumber(token?.price) ?? null;
+  const displayVolume = stats?.vol24h ?? candleStats?.volume ?? finiteNumber(token?.vol24h);
+  const displayChange = stats?.change ?? candleStats?.change ?? finiteNumber(token?.change24);
   const displayMktCap = displayPrice != null ? displayPrice * (finiteNumber(token?.totalSupply) || 1e9) : finiteNumber(token?.mktCap);
   const currentCurve = curveState?.mint === mint ? curveState : null;
   const poolRes = reserves || currentCurve;
 
   useEffect(() => {
     let alive = true;
-    // Always attempt the indexed lookup — it's the only source of a real
-    // pairAddress (a token passed via router state, e.g. from Portfolio's
-    // "Created by you" list, only carries name/symbol/icon, not a pair).
-    // Don't block the UI with a spinner if we already have something to
-    // show from nav state though.
-    if (!token || token.tokenAddress !== mint) setLoading(true);
     const refresh = async () => {
       const t = await fetchTokenByMint(mint, publicKey?.toString());
-      if (!alive) return;
+      if (!alive || !t) return;
       setToken((prev) => {
-        const base = prev?.tokenAddress === mint ? prev : { tokenAddress: mint };
+        const base = prev?.tokenAddress === mint ? prev : { tokenAddress: mint, pairAddress: defaultPair };
         return mergeToken(base, t);
       });
-      setLoading(false);
     };
-    // Router state belongs to this navigation; never show a previous mint's name.
-    setToken((prev) => mergeToken(prev?.tokenAddress === mint ? prev : { tokenAddress: mint }, location.state?.token?.tokenAddress === mint ? location.state.token : null));
+    if (location.state?.token?.tokenAddress === mint) {
+      setToken((prev) => mergeToken(prev, location.state.token));
+    }
     refresh();
     const timer = window.setInterval(refresh, 15000);
     return () => { alive = false; window.clearInterval(timer); };
-  }, [mint, publicKey, location.state, chartRefresh]); // eslint-disable-line
+  }, [mint, publicKey, location.state, defaultPair]);
 
-  const chartToken = useMemo(() => ({ ...token, pairAddress: (curveState?.mint === mint ? curveState.pairAddress : null) || token?.pairAddress }), [token, curveState, mint]);
+  const chartToken = useMemo(() => ({
+    tokenAddress: mint,
+    pairAddress: (curveState?.mint === mint ? curveState.pairAddress : null) || token?.pairAddress || defaultPair,
+    ...token,
+  }), [token, curveState, mint, defaultPair]);
 
   const fmt = (v, d = 2) =>
     v == null || v === '' ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: d });
@@ -182,30 +225,14 @@ export default function TokenDetail() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
           <div className="rounded-xl border border-border bg-bg-card p-2 shadow-card">
-            <div className={token ? '' : 'h-[380px] md:h-[460px]'}>
-              {token ? (
-                // TradingViewChart fetches candles from our own backend
-                // (/v1/market/get_candlestick), independent of on-chain
-                // trades — an old seeded token can have real backend kline
-                // history with zero on-chain trades (or vice versa for a
-                // brand-new one). It shows its own empty state either way.
-                <TradingViewChart token={chartToken} liveTrades={trades} refreshKey={chartRefresh} visible />
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
-                  <div className="text-4xl">🌱</div>
-                  <div className="text-sm font-semibold text-ink">No trades yet</div>
-                  <div className="text-xs text-muted">
-                    {curveState ? (
-                      <>
-                        Starting price <span className="text-ink">{priceStr(curveState.priceUsd)}</span> ·{' '}
-                        {curveState.source} bonding curve · be the first to buy →
-                      </>
-                    ) : (
-                      'Be the first to buy this token — the candle chart starts after the first trade.'
-                    )}
-                  </div>
-                </div>
-              )}
+            <div className="h-[380px] md:h-[460px]">
+              <TradingViewChart
+                token={chartToken}
+                liveTrades={trades}
+                refreshKey={chartRefresh}
+                onCandleStats={handleCandleStats}
+                visible
+              />
             </div>
           </div>
 
@@ -295,27 +322,18 @@ export default function TokenDetail() {
         </div>
 
         <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
-          {loading ? (
-            <div className="h-64 animate-pulse rounded-xl border border-border bg-bg-card" />
-          ) : (
-            <>
-              <TradePanel
-                token={token}
-                // Use the same resolved price shown in the header. Previously
-                // the header preferred indexed token.price while the limit
-                // panel used the latest RPC trade, so "now" could disagree
-                // with Price (for example 3.33e-6 vs 3.39e-6).
-                currentPriceUsd={displayPrice ?? reserves?.priceUsd ?? 0}
-                onLimitOrderPlaced={() => setOrdersTick((t) => t + 1)}
-                onTradeComplete={handleTradeComplete}
-              />
-              <OpenOrders
-                mint={mint}
-                symbol={token?.tokenSymbol || 'TOKEN'}
-                refreshTick={ordersTick}
-              />
-            </>
-          )}
+          <TradePanel
+            token={token}
+            // Use the same resolved price shown in the header.
+            currentPriceUsd={displayPrice ?? reserves?.priceUsd ?? 0}
+            onLimitOrderPlaced={() => setOrdersTick((t) => t + 1)}
+            onTradeComplete={handleTradeComplete}
+          />
+          <OpenOrders
+            mint={mint}
+            symbol={token?.tokenSymbol || 'TOKEN'}
+            refreshTick={ordersTick}
+          />
         </div>
       </div>
     </div>
