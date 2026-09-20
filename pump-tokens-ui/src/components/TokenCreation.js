@@ -241,10 +241,27 @@ const TokenCreation = () => {
 
     } catch (err) {
       console.error('Token creation error:', err);
-      setError(`Failed to create token: ${err.message}`);
+      setError(friendlyTokenCreationError(err));
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Solana surfaces insufficient-balance failures as a raw simulation log
+  // ("Attempt to debit an account but found no record of a prior credit" for
+  // a wallet with 0 SOL, "insufficient lamports" once it has some but not
+  // enough) — translate the common case into something a wallet's owner can
+  // actually act on instead of a cryptic RPC error string.
+  const friendlyTokenCreationError = (err) => {
+    const msg = err?.message || '';
+    if (
+      msg.includes('no record of a prior credit') ||
+      msg.includes('insufficient lamports') ||
+      msg.includes('insufficient funds')
+    ) {
+      return 'Insufficient SOL balance. This wallet has no (or not enough) devnet SOL to pay for the transaction — use the Faucet tab to airdrop some, then try again.';
+    }
+    return `Failed to create token: ${msg}`;
   };
 
   if (!connected) {
