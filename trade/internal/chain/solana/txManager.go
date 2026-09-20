@@ -204,6 +204,18 @@ func (tm *TxManager) CreateMarketTx(ctx context.Context, in *CreateMarketTx) (st
 		if nil != err {
 			return "", err
 		}
+	case constants.PumpMeteora:
+		// Create PumpMeteora (bonding-curve) market order instructions
+		instructions, err = tm.CreateMarketOrder4PumpMeteora(ctx, in)
+		if nil != err {
+			return "", err
+		}
+	case constants.PumpMeteoraV2:
+		// Create optimized PumpMeteora market order instructions
+		instructions, err = tm.CreateMarketOrder4PumpMeteoraV2(ctx, in)
+		if nil != err {
+			return "", err
+		}
 	default:
 		return "", fmt.Errorf("TradePoolName:%s not support", in.TradePoolName)
 	}
@@ -641,6 +653,37 @@ func (tm *TxManager) Sign(ctx context.Context, insts []aSDK.Instruction, signTra
 	return tx, nil
 }
 
+// BuildSignAndSend builds the swap, signs it with the server-held key
+// (PRIVATE_KEY env, base64 ed25519) and submits it. Used for triggered limit
+// orders where no user wallet is present to sign. The fee payer must be the
+// server wallet (createMarketTx.UserWalletAddress) or the signature won't match.
+func (tm *TxManager) BuildSignAndSend(ctx context.Context, createMarketTx *trade.CreateMarketTx) (string, error) {
+	in, err := convertCreateMarketTx(createMarketTx)
+	if err != nil {
+		return "", err
+	}
+	return tm.CreateMarketTx(ctx, in)
+}
+
+// ServerWalletAddress derives the public address of the server-held signing key
+// (PRIVATE_KEY env). Returns an error when the key is absent or malformed, so
+// callers can fail an order with a clear reason instead of an invalid tx.
+func ServerWalletAddress() (string, error) {
+	privateKeyBase64 := os.Getenv("PRIVATE_KEY")
+	if privateKeyBase64 == "" {
+		return "", fmt.Errorf("PRIVATE_KEY environment variable not set")
+	}
+	privateKeyBytes, err := base64.StdEncoding.DecodeString(privateKeyBase64)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode PRIVATE_KEY: %v", err)
+	}
+	if len(privateKeyBytes) != ed25519.PrivateKeySize {
+		return "", fmt.Errorf("invalid PRIVATE_KEY length: expected %d, got %d", ed25519.PrivateKeySize, len(privateKeyBytes))
+	}
+	pub := ed25519.PrivateKey(privateKeyBytes).Public().(ed25519.PublicKey)
+	return aSDK.PublicKeyFromBytes(pub).String(), nil
+}
+
 // BuildUnsignedTransaction builds an unsigned transaction for third-party wallet signing
 func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketTx *trade.CreateMarketTx) (string, error) {
 	logx.WithContext(ctx).Infof("Building unsigned transaction for third-party wallet signing")
@@ -658,6 +701,18 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 	case constants.PumpFun:
 		logx.WithContext(ctx).Infof("Using PumpFun pool for transaction")
 		instructions, err = tm.CreateMarketOrder4Pumpfun(ctx, in)
+		if err != nil {
+			return "", err
+		}
+	case constants.PumpMeteora:
+		logx.WithContext(ctx).Infof("Using PumpMeteora pool for transaction")
+		instructions, err = tm.CreateMarketOrder4PumpMeteora(ctx, in)
+		if err != nil {
+			return "", err
+		}
+	case constants.PumpMeteoraV2:
+		logx.WithContext(ctx).Infof("Using PumpMeteoraV2 (optimized) pool for transaction")
+		instructions, err = tm.CreateMarketOrder4PumpMeteoraV2(ctx, in)
 		if err != nil {
 			return "", err
 		}

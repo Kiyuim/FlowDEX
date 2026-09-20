@@ -13,6 +13,7 @@ import (
 	trade2 "dex/pkg/trade"
 	"dex/pkg/util"
 	"dex/pkg/xcode"
+	chainsolana "dex/trade/internal/chain/solana"
 	"dex/trade/internal/svc"
 	"dex/trade/trade"
 
@@ -21,6 +22,11 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"go.opentelemetry.io/otel/trace"
 )
+
+// NominalSolPriceUsd is a fallback SOL/USD price used only for order-record
+// metadata when no live price feed is available (e.g. devnet). It never affects
+// the on-chain swap, which is built from live pool state.
+const NominalSolPriceUsd = 150
 
 type CreateMarketOrderLogic struct {
 	ctx    context.Context
@@ -47,10 +53,29 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.CreateMarketOrderRe
 		return nil, xcode.AmountErr
 	}
 
+	// Attached trailing stop: buy-only, N in (0,100) (same zombie-order guard
+	// as CreateTrailingStop), and not combinable with double-out — both attach
+	// a sell leg to the same fill and would race over the same tokens.
+	if in.TrailingPercent != 0 {
+		if in.TrailingPercent < 0 || in.TrailingPercent >= 100 {
+			return nil, xcode.AmountErr
+		}
+		if in.SwapType != trade.SwapType_Buy {
+			return nil, fmt.Errorf("trailing_percent is only valid on buy orders")
+		}
+		if in.DoubleOut {
+			return nil, fmt.Errorf("double_out and trailing_percent cannot be combined")
+		}
+	}
+
 	// save to db first
 	var isAntiMev int64 = 0
 
-	var isAutoSlippage int64 = 0
+	// Auto slippage (自动滑点): on a slippage failure the executor escalates the
+	// slippage tier and rebuilds the swap instead of failing the order. The flag
+	// is stored on the order so server-signed legs created later (double-out
+	// sell, attached trailing stop, triggered limit) inherit it too.
+	isAutoSlippage := util.BoolToInt64(in.IsAutoSlippage)
 
 	//
 	if in == nil {
@@ -78,11 +103,13 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.CreateMarketOrderRe
 
 		return nil, fmt.Errorf("pairInfo is nil for token: %s", in.TokenCa)
 	}
-	// check pair是否正常
+	// A zero Fdv only means the market-cap metadata hasn't synced yet (e.g. a
+	// freshly-created or recently-reprocessed pump token). It does NOT mean the
+	// token is untradeable — the swap is built from live on-chain pool state, not
+	// from Fdv, which is only used for the OrderCap metadata below. So warn and
+	// continue instead of hard-failing every buy with a generic 515.
 	if pairInfo.Fdv == 0 {
-		fmt.Println("3333 pairInfo.Fdv is 0")
-
-		return nil, fmt.Errorf("%s pairInfo %s fdv is 0", pairInfo.Name, pairInfo.Address)
+		l.Errorf("pairInfo.Fdv is 0 for token %s (pair %s) — proceeding anyway; OrderCap metadata will be 0", in.TokenCa, pairInfo.Address)
 	}
 
 	fmt.Println("*********************3333***************")
@@ -105,11 +132,15 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.CreateMarketOrderRe
 				l.Infof("Retrieved SOL price: %f for token %s", nativePrice.BaseTokenPriceUsd, in.TokenCa)
 				baseTokenPrice = decimal.NewFromFloat(nativePrice.BaseTokenPriceUsd)
 			} else {
-				l.Errorf("Failed to get native token price: %v", err)
-				return nil, fmt.Errorf("invalid base token price (zero) for token %s and unable to fetch current price", in.TokenCa)
+				// The SOL/USD price is only used for order-record metadata (USD
+				// valuation), not for the on-chain swap, which is built from live
+				// pool state. On devnet there is no SOL price feed, so fall back to
+				// a nominal value and proceed instead of failing every buy.
+				l.Errorf("Failed to get native token price (%v); using nominal fallback for order metadata", err)
+				baseTokenPrice = decimal.NewFromInt(NominalSolPriceUsd)
 			}
 		} else {
-			return nil, fmt.Errorf("invalid base token price (zero) for token %s", in.TokenCa)
+			baseTokenPrice = decimal.NewFromInt(NominalSolPriceUsd)
 		}
 	}
 
@@ -135,14 +166,29 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.CreateMarketOrderRe
 		OrderValueBase: orderValueBase,
 		OrderBasePrice: baseTokenPrice,
 		// 是否翻倍出本 1:是 0:否
-		DoubleOut:     util.BoolToInt64(in.DoubleOut),
-		DexName:       pairInfo.Name,
-		PairCa:        pairInfo.Address,
-		WalletAddress: in.UserWalletAddress,
+		DoubleOut: util.BoolToInt64(in.DoubleOut),
+		// >0 = auto-create a trailing stop for the fill once the buy confirms
+		TrailingPercent: int64(in.TrailingPercent),
+		DexName:         pairInfo.Name,
+		PairCa:          pairInfo.Address,
+		WalletAddress:   in.UserWalletAddress,
 	}
 	if in.IsOneClick {
 		order.TradeType = int64(trade.TradeType_OneClick)
 	}
+
+	// Double-out and trailing-stop-attached buys run custodially: the server
+	// wallet pays, signs and holds the tokens, so the auto-created sell leg can
+	// later be executed server-side too (the user isn't around to sign either
+	// leg after checkout).
+	if (in.DoubleOut || in.TrailingPercent > 0) && in.SwapType == trade.SwapType_Buy {
+		serverWallet, err := chainsolana.ServerWalletAddress()
+		if err != nil {
+			return nil, fmt.Errorf("double-out requires the server wallet: %v", err)
+		}
+		order.WalletAddress = serverWallet
+	}
+
 	err = model.InsertWithLog(l.ctx, order)
 	if err != nil {
 		l.Errorf("InsertWithLog err:%s", err.Error())
@@ -285,7 +331,37 @@ func (l *CreateMarketOrderLogic) createMarketTxWithPairInfo(order *trademodel.Tr
 	inTokenAddr := pairInfo.BaseTokenAddress
 	outTokenAddr := pairInfo.TokenAddress
 
+	// Solana pump/AMM pairs are always quoted in WSOL. If the pair record has no
+	// base-token address (e.g. it was first created by the indexed `create`
+	// before a trade filled the field in), default it so the swap can be built.
+	if inTokenAddr == "" && order.ChainId == constants.SolChainIdInt {
+		inTokenAddr = constants.TokenStrWrapSol
+	}
+	// The traded token is the one the request named; fall back to it if the pair
+	// record's token address hasn't been populated yet.
+	if outTokenAddr == "" {
+		outTokenAddr = order.TokenCa
+	}
+	// TradePoolName routes the swap to the right DEX builder. If the pair metadata
+	// is incomplete (empty name), default a Solana pump token to the bonding-curve
+	// (PumpFun) route — BuildBuyV2Instructions derives all accounts from the mint.
+	tradePoolName := pairInfo.Name
+	if tradePoolName == "" && order.ChainId == constants.SolChainIdInt {
+		tradePoolName = constants.PumpFun
+	}
+
 	inDecimal, outDecimal := uint8(pairInfo.BaseTokenDecimal), uint8(pairInfo.TokenDecimal)
+	// Devnet pair records can have incomplete metadata (0 decimals). For Solana the
+	// base/quote side is always WSOL (9 decimals); default the traded token to 6
+	// (the pump.fun standard) so sell amounts aren't scaled by the wrong power.
+	if order.ChainId == constants.SolChainIdInt {
+		if inDecimal == 0 {
+			inDecimal = 9
+		}
+		if outDecimal == 0 {
+			outDecimal = 6
+		}
+	}
 	fmt.Println("inDecimal is:", inDecimal)
 	fmt.Println("outDecimal is:", outDecimal)
 	var inTokenProgram, outTokenProgram string
@@ -330,11 +406,11 @@ func (l *CreateMarketOrderLogic) createMarketTxWithPairInfo(order *trademodel.Tr
 		// Gas类型
 		GasType: int32(order.GasType),
 		// 交易池名称
-		TradePoolName: pairInfo.Name,
+		TradePoolName: tradePoolName,
 		// 输入代币精度
-		InDecimal: 9,
+		InDecimal: inDecimal,
 		// 输出代币精度
-		OutDecimal: 9,
+		OutDecimal: outDecimal,
 		// 输入代币地址(默认为基础代币地址)
 		InTokenCa: inTokenAddr,
 		// 输出代币地址(默认为交易代币地址)
@@ -349,22 +425,33 @@ func (l *CreateMarketOrderLogic) createMarketTxWithPairInfo(order *trademodel.Tr
 		InTokenProgram: inTokenProgram,
 		// 输出代币的合约类型 token/token2022
 		OutTokenProgram: outTokenProgram,
+		// 限价单/移动止损触发时用户不在场，由服务端持有的密钥代签并直接上链；
+		// 翻倍出本的买单同样托管执行（后续自动卖单也要由服务端卖出）
+		ServerSign: order.TradeType == int64(trade.TradeType_Limit) ||
+			order.TradeType == int64(trade.TradeType_TokenCapLimit) ||
+			order.TradeType == int64(trade.TradeType_TrailingStop) ||
+			(order.DoubleOut == 1 && order.SwapType == int64(trade.SwapType_Buy)) ||
+			(order.TrailingPercent > 0 && order.SwapType == int64(trade.SwapType_Buy)),
 	}
 
 	// to make and send tx
 	var txHash string
 	tryTimes := 0
 	//  判断如果是自动滑点情况下，滑点过大的错误，那么增大滑点并重试
+	// 滑点失败的根源是报价过期（链上价格已比 minOut 差），所以每次重试都走完整的
+	// createAndSendTx：重新读池子 → 重新报价 → 新 blockhash 重建，而不是原样重发。
 	for tryTimes == 0 || (param.IsAutoSlippage && errors.Is(err, xcode.SlippageLimit) && tryTimes < 3) {
 		tryTimes++
 		switch tryTimes {
 		case 1:
 		case 2:
-			param.Slippage = 4500
-			l.Info("AutoSlippageRetry")
+			// 档位只升不降：用户滑点本来就 ≥ 档位时保持原值，仍然重试 —— 重建
+			// 拿到新池子状态，光重新报价就可能救活这一单。
+			param.Slippage = max(param.Slippage, 4500)
+			l.Infof("AutoSlippageRetry try=%d slippage=%d", tryTimes, param.Slippage)
 		case 3:
-			param.Slippage = 7000
-			l.Info("AutoSlippageRetry")
+			param.Slippage = max(param.Slippage, 7000)
+			l.Infof("AutoSlippageRetry try=%d slippage=%d", tryTimes, param.Slippage)
 		}
 		txHash, err = l.createAndSendTx(param)
 		if err != nil {
@@ -399,10 +486,40 @@ func (l *CreateMarketOrderLogic) createAndSendTx(param *trade2.CreateMarketTx) (
 			return "", fmt.Errorf("SolTxMananger is nil - check if Sol configuration is enabled")
 		}
 
-		// Build unsigned transaction for third-party wallet signing
-		unsignedTxBase64, err := l.svcCtx.SolTxMananger.BuildUnsignedTransaction(l.ctx, param)
+		// Triggered limit orders have no user present to sign — build, sign with
+		// the server-held key and submit, returning a real tx hash.
+		if param.ServerSign {
+			var txHash string
+			var err error
+			for attempt := 1; attempt <= 3; attempt++ {
+				txHash, err = l.svcCtx.SolTxMananger.BuildSignAndSend(l.ctx, param)
+				if err == nil {
+					break
+				}
+				l.Errorf("SolTxMananger.BuildSignAndSend attempt %d/3 err:%v", attempt, err)
+				// A slippage failure won't pass at the same slippage — hand it to
+				// the auto-slippage engine (outer loop) immediately so it escalates
+				// the tier instead of burning same-tier resends here.
+				if param.IsAutoSlippage && errors.Is(convertSwapErr(param.TradePoolName, err), xcode.SlippageLimit) {
+					break
+				}
+			}
+			return txHash, err
+		}
+
+		// The build issues several RPC calls to the (slow, rate-limited) public
+		// devnet RPC; a single transient failure would surface to the user as a
+		// generic 515. Retry the whole build a few times to absorb those.
+		var unsignedTxBase64 string
+		var err error
+		for attempt := 1; attempt <= 3; attempt++ {
+			unsignedTxBase64, err = l.svcCtx.SolTxMananger.BuildUnsignedTransaction(l.ctx, param)
+			if err == nil {
+				break
+			}
+			l.Errorf("SolTxMananger.BuildUnsignedTransaction attempt %d/3 err:%v", attempt, err)
+		}
 		if err != nil {
-			l.Errorf("SolTxMananger.BuildUnsignedTransaction err:%v", err)
 			return "", err
 		}
 

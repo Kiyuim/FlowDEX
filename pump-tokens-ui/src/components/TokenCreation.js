@@ -34,9 +34,7 @@ const TokenCreation = () => {
     supply: 1000000,
     description: '',
     image: '',
-    useToken2022: true,
     freezeAuthority: true,
-    updateAuthority: true,
     // 'spl' = plain SPL token; 'meteora' / 'meteorav2' = a bonding-curve launch on our programs
     launchTarget: 'spl'
   });
@@ -314,28 +312,6 @@ const TokenCreation = () => {
             )}
           </div>
 
-          <div className="program-selector">
-            <label className="toggle-label">
-              <input
-                type="checkbox"
-                name="useToken2022"
-                checked={formData.useToken2022}
-                onChange={handleInputChange}
-              />
-              <span className="toggle-slider"></span>
-              <span className="toggle-text">
-                {formData.useToken2022 ? '🆕 Token-2022' : '📜 Token Program'}
-              </span>
-            </label>
-            <div className="program-info">
-              {formData.useToken2022 ? (
-                <span className="info-text">🚧 Token-2022 coming soon! Currently using Token Program.</span>
-              ) : (
-                <span className="info-text">🔒 Classic token program (widely supported)</span>
-              )}
-            </div>
-          </div>
-
           <div className="input-grid">
             <div className="input-group">
               <label>Token Name *</label>
@@ -389,20 +365,6 @@ const TokenCreation = () => {
             </div>
           </div>
 
-          {false && formData.useToken2022 && (
-            <div className="input-group">
-              <label>Description</label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                placeholder="Describe your token..."
-                rows="3"
-                disabled={isLoading}
-              />
-            </div>
-          )}
-
           {formData.launchTarget !== 'spl' && (
             <div className="input-group">
               <label>Image / Metadata URL</label>
@@ -431,20 +393,6 @@ const TokenCreation = () => {
                 <span>🧊 Freeze Authority</span>
                 <small>Ability to freeze token accounts</small>
               </label>
-
-              {false && formData.useToken2022 && (
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    name="updateAuthority"
-                    checked={formData.updateAuthority}
-                    onChange={handleInputChange}
-                    disabled={isLoading}
-                  />
-                  <span>✏️ Update Authority</span>
-                  <small>Ability to update metadata</small>
-                </label>
-              )}
             </div>
           </div>
 

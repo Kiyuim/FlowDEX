@@ -9,6 +9,7 @@ import (
 	"dex/trade/internal/config"
 	"dex/trade/internal/server"
 	"dex/trade/internal/svc"
+	"dex/trade/internal/ticker"
 	"dex/trade/pkg/entity"
 	"dex/trade/trade"
 
@@ -33,6 +34,12 @@ func main() {
 	c.ApplyEnvOverrides() // fold SOL_NODE_URL (Railway secret) into Sol.NodeUrl
 	ctx := svc.NewServiceContext(c)
 	ctx.DisruptorWrapper = newDisruptor(ctx)
+
+	// Confirms on-chain fills against the consumer-built trade tables and
+	// auto-creates double-out sell orders (lesson 7.13).
+	tradeTicker := ticker.NewTradeTicker(ctx)
+	go tradeTicker.Start()
+	proc.AddShutdownListener(tradeTicker.Stop)
 
 	srv := server.NewTradeServer(ctx)
 

@@ -62,12 +62,15 @@ func (l *CreateLimitOrderLogic) CreateLimitOrder(in *trade.CreateLimitOrderReque
 		return nil, err
 	}
 
-	if pairInfo.Fdv == 0 {
-		return nil, fmt.Errorf("%s pairInfo %s fdv is 0", pairInfo.Name, pairInfo.Address)
+	// Base对U的价格。Devnet pair rows often carry base_token_price=0 (no SOL/USDC
+	// pool to derive it from); fall back to the same nominal price the consumer
+	// uses when pushing trigger prices, so both sides of the comparison stay in
+	// the same unit. Also guards the Div below against a zero divisor.
+	baseTokenPrice := pairInfo.BaseTokenPrice
+	if baseTokenPrice <= 0 {
+		baseTokenPrice = constants.NominalSolPriceUsd
 	}
-
-	// Base对U的价格
-	basePriceDecimal := decimal.NewFromFloat(pairInfo.BaseTokenPrice)
+	basePriceDecimal := decimal.NewFromFloat(baseTokenPrice)
 
 	// 流通市值
 	capDecimal := decimal.NewFromFloat(pairInfo.Fdv)
@@ -75,7 +78,7 @@ func (l *CreateLimitOrderLogic) CreateLimitOrder(in *trade.CreateLimitOrderReque
 		ChainId:        in.GetChainId(),
 		TradeType:      int64(trade.TradeType_Limit),
 		GasType:        1,
-		IsAutoSlippage: 0,
+		IsAutoSlippage: util.BoolToInt64(in.IsAutoSlippage),
 		Slippage:       1000, // 10% slippage instead of 0.1%
 		IsAntiMev:      0,
 		TokenCa:        in.TokenCa,
@@ -96,7 +99,7 @@ func (l *CreateLimitOrderLogic) CreateLimitOrder(in *trade.CreateLimitOrderReque
 		}
 
 		// 转换为MeMe币对Base价格
-		priceBaseDecimal := priceUsdDecimal.Div(decimal.NewFromFloat(pairInfo.BaseTokenPrice))
+		priceBaseDecimal := priceUsdDecimal.Div(basePriceDecimal)
 
 		// 如果是买单，传入的数量是需要买多少sol, 就是挂单总价
 		order.OrderValueBase = amountDecimal
@@ -109,8 +112,12 @@ func (l *CreateLimitOrderLogic) CreateLimitOrder(in *trade.CreateLimitOrderReque
 		order.OrderPriceBase = priceBaseDecimal
 	}
 
-	// 按照市值挂单
+	// 按照市值挂单 TODO: 市值 = 代币总共的发行量*代币价格
 	if len(in.TokenCap) > 0 {
+		// 市值反推价格需要真实的 Fdv 和 TokenPrice，缺一不可
+		if pairInfo.Fdv == 0 || pairInfo.TokenPrice == 0 {
+			return nil, fmt.Errorf("%s pairInfo %s fdv/token_price is 0, cannot place cap order", pairInfo.Name, pairInfo.Address)
+		}
 		tokenCapDecimal, err := decimal.NewFromString(in.TokenCap)
 		if err != nil {
 			return nil, fmt.Errorf("price:%s parse err:%s", in.TokenCap, err.Error())
@@ -120,7 +127,7 @@ func (l *CreateLimitOrderLogic) CreateLimitOrder(in *trade.CreateLimitOrderReque
 		// 当时计算出来的价格
 		priceUsdDecimal := tokenCapDecimal.Div(totalSupply)
 		// 转换为MeMe币对Base价格
-		priceBaseDecimal := priceUsdDecimal.Div(decimal.NewFromFloat(pairInfo.BaseTokenPrice))
+		priceBaseDecimal := priceUsdDecimal.Div(basePriceDecimal)
 
 		order.TradeType = int64(trade.TradeType_TokenCapLimit)
 

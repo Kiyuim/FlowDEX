@@ -32,6 +32,7 @@ type (
 		WithSession(tx *gorm.DB) TradeModel
 		BatchInsertTrades(ctx context.Context, trades []*Trade) error
 		GetNativeTokenPrice(ctx context.Context, chainId int64, searchTime time.Time) (float64, error)
+		FindOneByTxHashWithTime(ctx context.Context, txHash string, createdAt time.Time) (*Trade, error)
 	}
 
 	customTradeModel struct {
@@ -75,6 +76,30 @@ func (m *defaultTradeModel) GetNativeTokenPrice(ctx context.Context, chainId int
 
 	// Return the base token price if a record is found
 	return resp.BaseTokenPriceUsd, nil
+}
+
+// FindOneByTxHashWithTime looks up an on-chain fill by tx hash in the daily
+// shard tables around the order's creation time — the order's day and the next
+// (a tx submitted at 23:59 can land in a block after midnight, and created_at /
+// block_time may sit in different timezones). Shard tables that don't exist
+// (days with no trades at all) are skipped, not errors. Returns
+// gorm.ErrRecordNotFound when the tx isn't indexed yet.
+func (m *defaultTradeModel) FindOneByTxHashWithTime(ctx context.Context, txHash string, createdAt time.Time) (*Trade, error) {
+	for i := 0; i <= 1; i++ {
+		table := getShardTableNameByTime("trade", createdAt.AddDate(0, 0, i))
+		if !m.conn.Migrator().HasTable(table) {
+			continue
+		}
+		var resp Trade
+		err := m.conn.WithContext(ctx).Table(table).Where("tx_hash = ?", txHash).First(&resp).Error
+		if err == nil {
+			return &resp, nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
 }
 
 // getShardTableNameByTime generates a table name based on the given timestamp (30-minute interval)

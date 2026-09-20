@@ -17,6 +17,8 @@ const ProgramStrToken = constants.ProgramStrToken
 
 const ProgramStrPumpFun = constants.ProgramStrPumpFun
 const ProgramStrPumpAmm = constants.ProgramStrPumpAmm
+const ProgramStrPumpMeteora = constants.ProgramStrPumpMeteora
+const ProgramStrPumpMeteoraOpt = constants.ProgramStrPumpMeteoraOpt
 
 const TokenStrWrapSol = constants.TokenStrWrapSol
 const TokenStrUSDC = constants.TokenStrUSDC

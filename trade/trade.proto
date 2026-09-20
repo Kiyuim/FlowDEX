@@ -26,6 +26,9 @@ message CreateLimitOrderRequest {
   string price_usd = 5;
   bool double_out = 6;
   string token_cap = 7;
+  // auto slippage: on a slippage failure the executor rebuilds the swap with a
+  // bigger slippage tier (user → 45% → 70%) instead of failing the order.
+  bool is_auto_slippage = 8;
 }
 
 message CreateLimitOrderResponse {
@@ -47,6 +50,15 @@ message CreateMarketOrderRequest {
   bool double_out = 5;
   bool is_one_click = 6;
   string user_wallet_address = 7;
+  // buy only: >0 attaches a trailing stop — after the buy confirms, a
+  // trailing stop sell for the full fill is auto-created, anchored at the
+  // fill price. Custodial (server wallet) like double_out.
+  int32 trailing_percent = 8;
+  // auto slippage: on a slippage failure the executor rebuilds the swap with a
+  // bigger slippage tier instead of failing. Only effective on server-signed
+  // sends (limit/trailing/double-out legs) — the unsigned-tx path never sees
+  // the send error.
+  bool is_auto_slippage = 9;
 }
 
 message CreateMarketOrderResponse {
@@ -106,6 +118,8 @@ message QueryOrderInfo {
   string tx_hash = 15;
   int64 create_time = 16;
   int64 update_time = 17;
+  int64 double_out = 18; // 1 = double-out order (buy: user intent; sell: auto-created by double-out)
+  int64 trailing_percent = 19; // trailing stop: drawdown percent N (trade_type=5)
 }
 
 message QueryCurrentOrdersResponse {
@@ -207,6 +221,7 @@ message CreateTrailingStopRequest {
   string token_ca = 2;
   string amount = 3;           // 交易数量
   int32 trailing_percent = 4;  // 回撤百分比
+  bool is_auto_slippage = 5;   // 自动滑点：滑点失败时升档重建重试
 }
 
 message CreateTrailingStopResponse {

@@ -271,7 +271,7 @@ func (s *BlockService) ProcessBlock(ctx context.Context, slot int64) {
 	// }
 
 	// 推送 sol 和 代币价格给trade服务，用于限价单交易匹配
-	// s.SendTokenPrice2TradeRPC(ctx, solPrice, tradeMap)
+	s.SendTokenPrice2TradeRPC(ctx, solPrice, tradeMap)
 
 	//并发处理： 保存交易信息，保存token账户信息
 	group := threading.NewRoutineGroup()
@@ -713,24 +713,28 @@ func DecodeInstruction(
 		// trade, err = DecodeRaydiumInstruction(ctx, sc, dtx, instruction, innerInstructions)
 		// return trade, err
 	} else if program == clmm.ProgramClMMDevNet.String() || program == "A1izdbCxDvLjZ2WZFkPdSLNBrrYrhBqxmmzCkm82G4ys" { // devnet clmm
-		// //output
-		// fmt.Println("22222DecodeInstruction: Processing program %s for tx %s", program, dtx.TxHash)
-		// fmt.Println("Find devnet clmm tx: ", dtx.TxHash)
-		// innerInstructions = dtx.InnerInstructionMap[index]
-		// decoder := &ConcentratedLiquidityDecoder{
-		// 	ctx:                 ctx,
-		// 	svcCtx:              sc,
-		// 	dtx:                 dtx,
-		// 	compiledInstruction: instruction,
-		// 	innerInstruction:    innerInstructions,
-		// }
-		// trade, err = decoder.DecodeRaydiumConcentratedLiquidityInstruction()
-		// if err != nil {
-		// 	logx.Errorf("error find clmm tx: %v, err : %v", dtx.TxHash, err)
-		// 	return nil, err
-		// }
-		// logx.Infof("find clmm tx: %v, pairInfo: %#v", dtx.TxHash, trade.PairInfo)
-		// return trade, err
+		innerInstructions := dtx.InnerInstructionMap[index]
+		decoder := &ConcentratedLiquidityDecoder{
+			ctx:                 ctx,
+			svcCtx:              sc,
+			dtx:                 dtx,
+			compiledInstruction: instruction,
+			innerInstruction:    innerInstructions,
+		}
+		trade, err = decoder.DecodeRaydiumConcentratedLiquidityInstruction()
+		if err != nil {
+			logx.Errorf("error find clmm tx: %v, err : %v", dtx.TxHash, err)
+			return nil, err
+		}
+		return trade, err
+	} else if program == ProgramStrPumpMeteora {
+		// second token source: our own pump-meteora bonding-curve program
+		trade, err = DecodePumpMeteoraInstruction(ctx, sc, dtx, instruction, index)
+		return trade, err
+	} else if program == ProgramStrPumpMeteoraOpt {
+		// third token source: the optimized/hardened pump-meteora build
+		trade, err = DecodePumpMeteoraOptInstruction(ctx, sc, dtx, instruction, index)
+		return trade, err
 	} else if program == cpmm.ProgramRaydiumCPMMProgram.String() {
 		// innerInstructions = dtx.InnerInstructionMap[index]
 		// decoder := &CPMMDecoder{
@@ -842,6 +846,12 @@ func DecodeInnerInstruction(
 			return nil, err
 		}
 		logx.Infof("find inner cpmm tx: %v, pairInfo: %#v", dtx.TxHash, trade.PairInfo)
+		return trade, err
+	} else if program == ProgramStrPumpMeteora {
+		trade, err = DecodePumpMeteoraInstruction(ctx, sc, dtx, instruction, i)
+		return trade, err
+	} else if program == ProgramStrPumpMeteoraOpt {
+		trade, err = DecodePumpMeteoraOptInstruction(ctx, sc, dtx, instruction, i)
 		return trade, err
 	}
 

@@ -39,6 +39,12 @@ const (
 
 const SolDecimal = 9
 
+// NominalSolPriceUsd is the fallback SOL/USD price used on devnet, where no
+// SOL/USDC pool exists to derive a real one. The consumer uses the same value
+// when computing trigger prices for limit orders, so price comparisons on the
+// trade side must fall back to it too or the units drift apart.
+const NominalSolPriceUsd = 150
+
 const ProgramStrRaydiumV4 = "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
 const ProgramStrRaydiumV2 = "RVKd61ztZW9GUwhRbbLoYVRE5Xf1B2tVscKqwZqXgEr"
 
@@ -49,6 +55,15 @@ const ProgramStrAssociatedToken = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
 
 const ProgramStrPumpFun = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
 const ProgramStrPumpAmm = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"
+
+// pump-meteora bonding-curve program (our own deployed contract on devnet).
+// A second "token source" indexed alongside pump.fun.
+const ProgramStrPumpMeteora = "AEBUS7kBka3pg5HyzUqgDYspvAPjFryyXjA5ZvRhUJU5"
+
+// pump-meteora OPTIMIZED (security-hardened) build — a distinct devnet program with a
+// changed ABI (swap gains max_sol_cost; events carry extra real-reserve + timestamp fields).
+// Indexed as a third "token source".
+const ProgramStrPumpMeteoraOpt = "241xjmD7ozZGrhyBgVn1MSs5eHXe1QPpD1vJgPNRQRzQ"
 
 const TokenStrWrapSol = "So11111111111111111111111111111111111111112"
 const TokenStrUSDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"

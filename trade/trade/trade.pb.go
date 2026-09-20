@@ -355,16 +355,19 @@ func (TransferStatus) EnumDescriptor() ([]byte, []int) {
 }
 
 type CreateLimitOrderRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ChainId       int64                  `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
-	TokenCa       string                 `protobuf:"bytes,2,opt,name=token_ca,json=tokenCa,proto3" json:"token_ca,omitempty"`
-	SwapType      SwapType               `protobuf:"varint,3,opt,name=swap_type,json=swapType,proto3,enum=trade.SwapType" json:"swap_type,omitempty"`
-	Amount        string                 `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount,omitempty"`
-	PriceUsd      string                 `protobuf:"bytes,5,opt,name=price_usd,json=priceUsd,proto3" json:"price_usd,omitempty"`
-	DoubleOut     bool                   `protobuf:"varint,6,opt,name=double_out,json=doubleOut,proto3" json:"double_out,omitempty"`
-	TokenCap      string                 `protobuf:"bytes,7,opt,name=token_cap,json=tokenCap,proto3" json:"token_cap,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ChainId   int64                  `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	TokenCa   string                 `protobuf:"bytes,2,opt,name=token_ca,json=tokenCa,proto3" json:"token_ca,omitempty"`
+	SwapType  SwapType               `protobuf:"varint,3,opt,name=swap_type,json=swapType,proto3,enum=trade.SwapType" json:"swap_type,omitempty"`
+	Amount    string                 `protobuf:"bytes,4,opt,name=amount,proto3" json:"amount,omitempty"`
+	PriceUsd  string                 `protobuf:"bytes,5,opt,name=price_usd,json=priceUsd,proto3" json:"price_usd,omitempty"`
+	DoubleOut bool                   `protobuf:"varint,6,opt,name=double_out,json=doubleOut,proto3" json:"double_out,omitempty"`
+	TokenCap  string                 `protobuf:"bytes,7,opt,name=token_cap,json=tokenCap,proto3" json:"token_cap,omitempty"`
+	// auto slippage: on a slippage failure the executor rebuilds the swap with a
+	// bigger slippage tier (user → 45% → 70%) instead of failing the order.
+	IsAutoSlippage bool `protobuf:"varint,8,opt,name=is_auto_slippage,json=isAutoSlippage,proto3" json:"is_auto_slippage,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CreateLimitOrderRequest) Reset() {
@@ -444,6 +447,13 @@ func (x *CreateLimitOrderRequest) GetTokenCap() string {
 		return x.TokenCap
 	}
 	return ""
+}
+
+func (x *CreateLimitOrderRequest) GetIsAutoSlippage() bool {
+	if x != nil {
+		return x.IsAutoSlippage
+	}
+	return false
 }
 
 type CreateLimitOrderResponse struct {
@@ -579,8 +589,17 @@ type CreateMarketOrderRequest struct {
 	DoubleOut         bool                   `protobuf:"varint,5,opt,name=double_out,json=doubleOut,proto3" json:"double_out,omitempty"`
 	IsOneClick        bool                   `protobuf:"varint,6,opt,name=is_one_click,json=isOneClick,proto3" json:"is_one_click,omitempty"`
 	UserWalletAddress string                 `protobuf:"bytes,7,opt,name=user_wallet_address,json=userWalletAddress,proto3" json:"user_wallet_address,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// buy only: >0 attaches a trailing stop — after the buy confirms, a
+	// trailing stop sell for the full fill is auto-created, anchored at the
+	// fill price. Custodial (server wallet) like double_out.
+	TrailingPercent int32 `protobuf:"varint,8,opt,name=trailing_percent,json=trailingPercent,proto3" json:"trailing_percent,omitempty"`
+	// auto slippage: on a slippage failure the executor rebuilds the swap with a
+	// bigger slippage tier instead of failing. Only effective on server-signed
+	// sends (limit/trailing/double-out legs) — the unsigned-tx path never sees
+	// the send error.
+	IsAutoSlippage bool `protobuf:"varint,9,opt,name=is_auto_slippage,json=isAutoSlippage,proto3" json:"is_auto_slippage,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CreateMarketOrderRequest) Reset() {
@@ -660,6 +679,20 @@ func (x *CreateMarketOrderRequest) GetUserWalletAddress() string {
 		return x.UserWalletAddress
 	}
 	return ""
+}
+
+func (x *CreateMarketOrderRequest) GetTrailingPercent() int32 {
+	if x != nil {
+		return x.TrailingPercent
+	}
+	return 0
+}
+
+func (x *CreateMarketOrderRequest) GetIsAutoSlippage() bool {
+	if x != nil {
+		return x.IsAutoSlippage
+	}
+	return false
 }
 
 type CreateMarketOrderResponse struct {
@@ -935,26 +968,28 @@ func (x *QueryCurrentOrdersRequest) GetChainId() int64 {
 }
 
 type QueryOrderInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	ChainId       int64                  `protobuf:"varint,2,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
-	TokenCa       string                 `protobuf:"bytes,3,opt,name=token_ca,json=tokenCa,proto3" json:"token_ca,omitempty"`
-	TokenSymbol   string                 `protobuf:"bytes,4,opt,name=token_symbol,json=tokenSymbol,proto3" json:"token_symbol,omitempty"`
-	TokenIcon     string                 `protobuf:"bytes,5,opt,name=token_icon,json=tokenIcon,proto3" json:"token_icon,omitempty"`
-	TradeType     int64                  `protobuf:"varint,6,opt,name=trade_type,json=tradeType,proto3" json:"trade_type,omitempty"`
-	SwapType      int64                  `protobuf:"varint,7,opt,name=swap_type,json=swapType,proto3" json:"swap_type,omitempty"`
-	Cap           string                 `protobuf:"bytes,8,opt,name=cap,proto3" json:"cap,omitempty"`
-	Amount        string                 `protobuf:"bytes,9,opt,name=amount,proto3" json:"amount,omitempty"`
-	Price         string                 `protobuf:"bytes,10,opt,name=price,proto3" json:"price,omitempty"`
-	PriceUsd      string                 `protobuf:"bytes,11,opt,name=price_usd,json=priceUsd,proto3" json:"price_usd,omitempty"`
-	Value         string                 `protobuf:"bytes,12,opt,name=value,proto3" json:"value,omitempty"`
-	ValueUsd      string                 `protobuf:"bytes,13,opt,name=value_usd,json=valueUsd,proto3" json:"value_usd,omitempty"`
-	Status        int64                  `protobuf:"varint,14,opt,name=status,proto3" json:"status,omitempty"`
-	TxHash        string                 `protobuf:"bytes,15,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
-	CreateTime    int64                  `protobuf:"varint,16,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
-	UpdateTime    int64                  `protobuf:"varint,17,opt,name=update_time,json=updateTime,proto3" json:"update_time,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	ChainId         int64                  `protobuf:"varint,2,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	TokenCa         string                 `protobuf:"bytes,3,opt,name=token_ca,json=tokenCa,proto3" json:"token_ca,omitempty"`
+	TokenSymbol     string                 `protobuf:"bytes,4,opt,name=token_symbol,json=tokenSymbol,proto3" json:"token_symbol,omitempty"`
+	TokenIcon       string                 `protobuf:"bytes,5,opt,name=token_icon,json=tokenIcon,proto3" json:"token_icon,omitempty"`
+	TradeType       int64                  `protobuf:"varint,6,opt,name=trade_type,json=tradeType,proto3" json:"trade_type,omitempty"`
+	SwapType        int64                  `protobuf:"varint,7,opt,name=swap_type,json=swapType,proto3" json:"swap_type,omitempty"`
+	Cap             string                 `protobuf:"bytes,8,opt,name=cap,proto3" json:"cap,omitempty"`
+	Amount          string                 `protobuf:"bytes,9,opt,name=amount,proto3" json:"amount,omitempty"`
+	Price           string                 `protobuf:"bytes,10,opt,name=price,proto3" json:"price,omitempty"`
+	PriceUsd        string                 `protobuf:"bytes,11,opt,name=price_usd,json=priceUsd,proto3" json:"price_usd,omitempty"`
+	Value           string                 `protobuf:"bytes,12,opt,name=value,proto3" json:"value,omitempty"`
+	ValueUsd        string                 `protobuf:"bytes,13,opt,name=value_usd,json=valueUsd,proto3" json:"value_usd,omitempty"`
+	Status          int64                  `protobuf:"varint,14,opt,name=status,proto3" json:"status,omitempty"`
+	TxHash          string                 `protobuf:"bytes,15,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
+	CreateTime      int64                  `protobuf:"varint,16,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
+	UpdateTime      int64                  `protobuf:"varint,17,opt,name=update_time,json=updateTime,proto3" json:"update_time,omitempty"`
+	DoubleOut       int64                  `protobuf:"varint,18,opt,name=double_out,json=doubleOut,proto3" json:"double_out,omitempty"`                   // 1 = double-out order (buy: user intent; sell: auto-created by double-out)
+	TrailingPercent int64                  `protobuf:"varint,19,opt,name=trailing_percent,json=trailingPercent,proto3" json:"trailing_percent,omitempty"` // trailing stop: drawdown percent N (trade_type=5)
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *QueryOrderInfo) Reset() {
@@ -1102,6 +1137,20 @@ func (x *QueryOrderInfo) GetCreateTime() int64 {
 func (x *QueryOrderInfo) GetUpdateTime() int64 {
 	if x != nil {
 		return x.UpdateTime
+	}
+	return 0
+}
+
+func (x *QueryOrderInfo) GetDoubleOut() int64 {
+	if x != nil {
+		return x.DoubleOut
+	}
+	return 0
+}
+
+func (x *QueryOrderInfo) GetTrailingPercent() int64 {
+	if x != nil {
+		return x.TrailingPercent
 	}
 	return 0
 }
@@ -1828,6 +1877,7 @@ type CreateTrailingStopRequest struct {
 	TokenCa         string                 `protobuf:"bytes,2,opt,name=token_ca,json=tokenCa,proto3" json:"token_ca,omitempty"`
 	Amount          string                 `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount,omitempty"`                                           // 交易数量
 	TrailingPercent int32                  `protobuf:"varint,4,opt,name=trailing_percent,json=trailingPercent,proto3" json:"trailing_percent,omitempty"` // 回撤百分比
+	IsAutoSlippage  bool                   `protobuf:"varint,5,opt,name=is_auto_slippage,json=isAutoSlippage,proto3" json:"is_auto_slippage,omitempty"`  // 自动滑点：滑点失败时升档重建重试
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1888,6 +1938,13 @@ func (x *CreateTrailingStopRequest) GetTrailingPercent() int32 {
 		return x.TrailingPercent
 	}
 	return 0
+}
+
+func (x *CreateTrailingStopRequest) GetIsAutoSlippage() bool {
+	if x != nil {
+		return x.IsAutoSlippage
+	}
+	return false
 }
 
 type CreateTrailingStopResponse struct {
@@ -3045,7 +3102,7 @@ var File_trade_proto protoreflect.FileDescriptor
 
 const file_trade_proto_rawDesc = "" +
 	"\n" +
-	"\vtrade.proto\x12\x05trade\"\xee\x01\n" +
+	"\vtrade.proto\x12\x05trade\"\x98\x02\n" +
 	"\x17CreateLimitOrderRequest\x12\x19\n" +
 	"\bchain_id\x18\x01 \x01(\x03R\achainId\x12\x19\n" +
 	"\btoken_ca\x18\x02 \x01(\tR\atokenCa\x12,\n" +
@@ -3054,12 +3111,13 @@ const file_trade_proto_rawDesc = "" +
 	"\tprice_usd\x18\x05 \x01(\tR\bpriceUsd\x12\x1d\n" +
 	"\n" +
 	"double_out\x18\x06 \x01(\bR\tdoubleOut\x12\x1b\n" +
-	"\ttoken_cap\x18\a \x01(\tR\btokenCap\"5\n" +
+	"\ttoken_cap\x18\a \x01(\tR\btokenCap\x12(\n" +
+	"\x10is_auto_slippage\x18\b \x01(\bR\x0eisAutoSlippage\"5\n" +
 	"\x18CreateLimitOrderResponse\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\x04R\aorderId\"/\n" +
 	"\x12CancelOrderRequest\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\x03R\aorderId\"\x15\n" +
-	"\x13CancelOrderResponse\"\x8c\x02\n" +
+	"\x13CancelOrderResponse\"\xe1\x02\n" +
 	"\x18CreateMarketOrderRequest\x12\x19\n" +
 	"\bchain_id\x18\x01 \x01(\x05R\achainId\x12\x19\n" +
 	"\btoken_ca\x18\x02 \x01(\tR\atokenCa\x12,\n" +
@@ -3069,7 +3127,9 @@ const file_trade_proto_rawDesc = "" +
 	"double_out\x18\x05 \x01(\bR\tdoubleOut\x12 \n" +
 	"\fis_one_click\x18\x06 \x01(\bR\n" +
 	"isOneClick\x12.\n" +
-	"\x13user_wallet_address\x18\a \x01(\tR\x11userWalletAddress\"4\n" +
+	"\x13user_wallet_address\x18\a \x01(\tR\x11userWalletAddress\x12)\n" +
+	"\x10trailing_percent\x18\b \x01(\x05R\x0ftrailingPercent\x12(\n" +
+	"\x10is_auto_slippage\x18\t \x01(\bR\x0eisAutoSlippage\"4\n" +
 	"\x19CreateMarketOrderResponse\x12\x17\n" +
 	"\atx_hash\x18\x01 \x01(\tR\x06txHash\"\xff\x01\n" +
 	"\x11CreatePoolRequest\x12\x19\n" +
@@ -3092,7 +3152,7 @@ const file_trade_proto_rawDesc = "" +
 	"\tswap_type\x18\x03 \x01(\x03R\bswapType\x12\x17\n" +
 	"\apage_no\x18\x04 \x01(\x03R\x06pageNo\x12\x1b\n" +
 	"\tpage_size\x18\x05 \x01(\x03R\bpageSize\x12\x19\n" +
-	"\bchain_id\x18\x06 \x01(\x03R\achainId\"\xd7\x03\n" +
+	"\bchain_id\x18\x06 \x01(\x03R\achainId\"\xa1\x04\n" +
 	"\x0eQueryOrderInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x19\n" +
 	"\bchain_id\x18\x02 \x01(\x03R\achainId\x12\x19\n" +
@@ -3115,7 +3175,10 @@ const file_trade_proto_rawDesc = "" +
 	"\vcreate_time\x18\x10 \x01(\x03R\n" +
 	"createTime\x12\x1f\n" +
 	"\vupdate_time\x18\x11 \x01(\x03R\n" +
-	"updateTime\"]\n" +
+	"updateTime\x12\x1d\n" +
+	"\n" +
+	"double_out\x18\x12 \x01(\x03R\tdoubleOut\x12)\n" +
+	"\x10trailing_percent\x18\x13 \x01(\x03R\x0ftrailingPercent\"]\n" +
 	"\x1aQueryCurrentOrdersResponse\x12)\n" +
 	"\x04list\x18\x01 \x03(\v2\x15.trade.QueryOrderInfoR\x04list\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x03R\x05total\"\xc3\x02\n" +
@@ -3173,12 +3236,13 @@ const file_trade_proto_rawDesc = "" +
 	"\n" +
 	"market_cap\x18\x02 \x01(\x01R\tmarketCap\x12,\n" +
 	"\tswap_type\x18\x03 \x01(\x0e2\x0f.trade.SwapTypeR\bswapType\"\x16\n" +
-	"\x14ProcTokenCapResponse\"\x94\x01\n" +
+	"\x14ProcTokenCapResponse\"\xbe\x01\n" +
 	"\x19CreateTrailingStopRequest\x12\x19\n" +
 	"\bchain_id\x18\x01 \x01(\x03R\achainId\x12\x19\n" +
 	"\btoken_ca\x18\x02 \x01(\tR\atokenCa\x12\x16\n" +
 	"\x06amount\x18\x03 \x01(\tR\x06amount\x12)\n" +
-	"\x10trailing_percent\x18\x04 \x01(\x05R\x0ftrailingPercent\"7\n" +
+	"\x10trailing_percent\x18\x04 \x01(\x05R\x0ftrailingPercent\x12(\n" +
+	"\x10is_auto_slippage\x18\x05 \x01(\bR\x0eisAutoSlippage\"7\n" +
 	"\x1aCreateTrailingStopResponse\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\x04R\aorderId\"M\n" +
 	"\x15QueryHoldTokenRequest\x12\x19\n" +

@@ -20,6 +20,10 @@ type CreateMarketTx struct {
 	UsePriceLimit     bool
 	InTokenProgram    string
 	OutTokenProgram   string
+	// ServerSign routes the trade through the server-held key (PRIVATE_KEY env)
+	// instead of returning an unsigned tx for the user's wallet to sign. Used by
+	// triggered limit orders, where the user isn't present to sign.
+	ServerSign bool
 }
 
 type CreatePoolTx struct {

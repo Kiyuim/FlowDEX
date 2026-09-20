@@ -547,8 +547,7 @@ func (tm *TxManager) CreateMarketOrder4Pumpfun(ctx context.Context, in *CreateMa
 	amtDecimal = amtDecimal.Mul(decimal.NewFromInt(sol.Decimals2Value[in.InDecimal]))
 	amountUint64 := uint64(amtDecimal.IntPart())
 
-	priceDecimal, err := decimal.NewFromString(in.Price)
-	if err != nil {
+	if _, err := decimal.NewFromString(in.Price); err != nil {
 		return nil, err
 	}
 
@@ -582,11 +581,8 @@ func (tm *TxManager) CreateMarketOrder4Pumpfun(ctx context.Context, in *CreateMa
 		}
 	}
 
-	instructionNew, err := sol.CreateAtaIdempotent(initiator, initiator, tokenMint, tokenProgramID)
-	if nil != err {
-		return nil, err
-	}
-	instructions = append(instructions, instructionNew)
+	// Both the buy_v2 and sell_v2 paths (below) create the user's token ATA
+	// themselves as part of their setup, so no separate create is added here.
 
 	// #4 - System Program: Transfer, if in mint is wrapper sol
 	// #5 - Token Program: SyncNative
@@ -618,26 +614,27 @@ func (tm *TxManager) CreateMarketOrder4Pumpfun(ctx context.Context, in *CreateMa
 	// //////////////////////////////////////////////////////
 	// #7 - Build Buy Instruction
 	if swapDirection == sol.Swap_Direction_Buy {
-		logx.WithContext(ctx).Infof("CreateMarketOrder4Pumpfun::Swap_Direction_Buy, amount to buy in sol=%d", amountUint64)
+		logx.WithContext(ctx).Infof("CreateMarketOrder4Pumpfun::Swap_Direction_Buy (buy_v2), amount to buy in sol=%d", amountUint64)
 
-		// Pass the correct token program ID to BuildBuyInstruction
-		buyInstruction, err := pumpfun.BuildBuyInstructionWithTokenProgram(initiator, tokenMint, amountUint64, in.Slippage, tm.Client, priceDecimal.InexactFloat64(), in.InDecimal, in.OutDecimal, tokenProgramID)
+		// buy_v2: the current pump program rejects the legacy `buy` for
+		// buyback-enabled tokens (BuybackFeeRecipientMissing). BuildBuyV2Instructions
+		// handles WSOL wrapping, the extra ATAs, and (first-time) volume-accumulator init.
+		v2ixs, err := pumpfun.BuildBuyV2Instructions(tm.Client, initiator, tokenMint, tokenProgramID, amountUint64, uint32(in.Slippage))
 		if nil != err {
 			return nil, err
 		}
-		instructions = append(instructions, buyInstruction)
+		instructions = append(instructions, v2ixs...)
 	} else {
-		logx.WithContext(ctx).Infof("CreateMarketOrder4Pumpfun::Swap_Direction_Sell, amount to sell = %d, in.InDecimal=%d", amountUint64, in.InDecimal)
-		tokenAta, _, err := ag_solanago.FindAssociatedTokenAddress(initiator, tokenMint)
-		if nil != err {
-			return nil, err
-		}
+		logx.WithContext(ctx).Infof("CreateMarketOrder4Pumpfun::Swap_Direction_Sell (sell_v2), amount to sell = %d, in.InDecimal=%d", amountUint64, in.InDecimal)
 
-		buyInstruction, solVolume, err := pumpfun.BuildSellInstruction(tokenAta, initiator, tokenMint, amountUint64, in.Slippage, false, tm.Client, priceDecimal.InexactFloat64(), in.InDecimal, in.OutDecimal)
+		// sell_v2: mirrors buy_v2 (WSOL-quoted, Token-2022 aware). The legacy
+		// `sell` rejects Token-2022 mints (token_program InvalidProgramId) and
+		// buyback-enabled tokens.
+		v2sell, solVolume, err := pumpfun.BuildSellV2Instructions(tm.Client, initiator, tokenMint, tokenProgramID, amountUint64, uint32(in.Slippage))
 		if nil != err {
 			return nil, err
 		}
-		instructions = append(instructions, buyInstruction)
+		instructions = append(instructions, v2sell...)
 
 		out := decimal.NewFromUint64(solVolume)
 		serviceFee = uint64(out.Mul(sol.ServericeFeePercent).IntPart())
