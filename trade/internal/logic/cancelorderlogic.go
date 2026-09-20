@@ -3,6 +3,7 @@ package logic
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"dex/model/trademodel"
 	"dex/pkg/constants"
@@ -14,6 +15,14 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 )
+
+// stuckOrderAge is how long a market buy/sell can sit at OrderStatus_Proc
+// before it's treated as abandoned and becomes user-cancellable. Devnet
+// transactions confirm in seconds; anything still Proc after this either had
+// its ConfirmMarketOrder call lost (network blip) or predates that mechanism
+// entirely — either way, nothing is ever going to move it out of Proc on its
+// own, so it should not be stuck in Open Orders forever with no way out.
+const stuckOrderAge = 2 * time.Minute
 
 type CancelOrderLogic struct {
 	ctx    context.Context
@@ -37,16 +46,24 @@ func (l *CancelOrderLogic) CancelOrder(in *trade.CancelOrderRequest) (*trade.Can
 		return nil, fmt.Errorf("order %d not found: %w", in.OrderId, err)
 	}
 
-	if order.Status != int64(trade.OrderStatus_Waiting) {
+	fromStatus := int64(trade.OrderStatus_Waiting)
+	switch order.Status {
+	case int64(trade.OrderStatus_Waiting):
+	case int64(trade.OrderStatus_Proc):
+		if time.Since(order.CreatedAt) < stuckOrderAge {
+			return nil, fmt.Errorf("order %d is still being submitted, try again shortly", in.OrderId)
+		}
+		fromStatus = int64(trade.OrderStatus_Proc)
+	default:
 		return nil, fmt.Errorf("order %d is not open (status %d), cannot cancel", in.OrderId, order.Status)
 	}
 
-	rows, err := orderModel.UpdateOrderStatus(l.ctx, order, int64(trade.OrderStatus_Waiting), int64(trade.OrderStatus_Cancel))
+	rows, err := orderModel.UpdateOrderStatus(l.ctx, order, fromStatus, int64(trade.OrderStatus_Cancel))
 	if err != nil {
 		return nil, fmt.Errorf("CancelOrder update err: %w", err)
 	}
 	if rows == 0 {
-		return nil, fmt.Errorf("order %d already left waiting status, cannot cancel", in.OrderId)
+		return nil, fmt.Errorf("order %d already changed status, cannot cancel", in.OrderId)
 	}
 
 	// The order is only queued for triggering while it's still in Redis's

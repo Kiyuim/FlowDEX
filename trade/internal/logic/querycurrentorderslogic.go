@@ -32,13 +32,21 @@ func (l *QueryCurrentOrdersLogic) QueryCurrentOrders(in *trade.QueryCurrentOrder
 		return nil, err
 	}
 
-	// Best-effort token symbol/icon — an unindexed pair shouldn't hide the
-	// order itself, so a lookup failure just leaves these blank.
-	var tokenSymbol, tokenIcon string
-	if in.TokenCa != "" {
-		if pairInfo, perr := l.svcCtx.MarketClient.GetPairInfoByToken(l.ctx, &market.GetPairInfoByTokenRequest{
-			ChainId:      in.ChainId,
-			TokenAddress: in.TokenCa,
+	return &trade.QueryCurrentOrdersResponse{
+		List:  ordersToInfo(l.ctx, l.svcCtx, in.ChainId, in.TokenCa, orders),
+		Total: total,
+	}, nil
+}
+
+// ordersToInfo maps DB rows to the wire shape shared by the current-orders and
+// order-history RPCs. Token symbol is a best-effort lookup — an unindexed pair
+// shouldn't hide the orders themselves, so a failure just leaves it blank.
+func ordersToInfo(ctx context.Context, svcCtx *svc.ServiceContext, chainId int64, tokenCa string, orders []trademodel.TradeOrder) []*trade.QueryOrderInfo {
+	var tokenSymbol string
+	if tokenCa != "" {
+		if pairInfo, perr := svcCtx.MarketClient.GetPairInfoByToken(ctx, &market.GetPairInfoByTokenRequest{
+			ChainId:      chainId,
+			TokenAddress: tokenCa,
 		}); perr == nil {
 			tokenSymbol = pairInfo.TokenSymbol
 		}
@@ -53,7 +61,6 @@ func (l *QueryCurrentOrdersLogic) QueryCurrentOrders(in *trade.QueryCurrentOrder
 			ChainId:         o.ChainId,
 			TokenCa:         o.TokenCa,
 			TokenSymbol:     tokenSymbol,
-			TokenIcon:       tokenIcon,
 			TradeType:       o.TradeType,
 			SwapType:        o.SwapType,
 			Cap:             o.OrderCap.String(),
@@ -70,9 +77,5 @@ func (l *QueryCurrentOrdersLogic) QueryCurrentOrders(in *trade.QueryCurrentOrder
 			TrailingPercent: o.TrailingPercent,
 		})
 	}
-
-	return &trade.QueryCurrentOrdersResponse{
-		List:  list,
-		Total: total,
-	}, nil
+	return list
 }

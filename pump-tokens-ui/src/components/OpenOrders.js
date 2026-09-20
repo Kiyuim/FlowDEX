@@ -68,6 +68,12 @@ export default function OpenOrders({ mint, symbol, refreshTick = 0 }) {
           const st = ORDER_STATUS[o.status] || { label: `#${o.status}`, tone: 'muted' };
           const isBuy = o.swapType === 1;
           const isTrailing = o.tradeType === 5;
+          // Waiting orders are always cancellable. A market order still at
+          // "Triggered" after 2 minutes never got its on-chain result reported
+          // back (or predates that mechanism) — nothing will move it on its
+          // own, so let the user clear it. Mirrors the backend's stuckOrderAge.
+          const stuck = o.status === 2 && Date.now() / 1000 - o.createTime > 120;
+          const cancellable = o.status === 1 || stuck;
           return (
             <div
               key={o.id}
@@ -113,7 +119,7 @@ export default function OpenOrders({ mint, symbol, refreshTick = 0 }) {
               <span className={`rounded px-1.5 py-0.5 text-[11px] ${TONE_CLASSES[st.tone]}`}>
                 {st.label}
               </span>
-              {o.status === 1 && (
+              {cancellable && (
                 <button
                   onClick={() => onCancel(o.id)}
                   disabled={cancelling === o.id}

@@ -64,10 +64,26 @@ const TradingViewChart = ({ token, visible = true, mockMode = false, refreshKey 
         rightPriceScale: {
           borderColor: '#485c7b',
         },
+        // lightweight-charts renders unix timestamps in UTC by default, so a
+        // trade made at 18:53 local (UTC+8) showed up under ~10:53 on the
+        // axis. Format both the axis ticks and the crosshair in the
+        // viewer's local zone instead of shifting the data (which would
+        // break the click-info card's own time and the WS upserts).
+        localization: {
+          timeFormatter: (t) => new Date(t * 1000).toLocaleString(),
+        },
         timeScale: {
           borderColor: '#485c7b',
           timeVisible: true,
           secondsVisible: false,
+          tickMarkFormatter: (t, tickType) => {
+            const d = new Date(t * 1000);
+            // tickType: 0 year, 1 month, 2 day-of-month, 3 time, 4 time+seconds
+            if (tickType === 0) return String(d.getFullYear());
+            if (tickType === 1) return d.toLocaleDateString(undefined, { month: 'short' });
+            if (tickType === 2) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+          },
         },
         width: chartContainerRef.current.clientWidth,
         height: 400,

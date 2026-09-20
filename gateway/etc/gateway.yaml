@@ -79,6 +79,9 @@ Upstreams: # upstreams
         Path: /v1/trade/query_current_orders
         RpcPath: trade.Trade/QueryCurrentOrders
       - Method: post
+        Path: /v1/trade/query_order_history
+        RpcPath: trade.Trade/QueryOrderHistory
+      - Method: post
         Path: /v1/trade/create_pool
         RpcPath: trade.Trade/CreatePool
       - Method: post
@@ -136,6 +139,7 @@ whitelist:
     - /v1/trade/create_trailing_stop
     - /v1/trade/cancel_order
     - /v1/trade/query_current_orders
+    - /v1/trade/query_order_history
     - /v1/trade/create_market_order
     - /v1/trade/confirm_market_order
     - /v1/trade/create_pool
