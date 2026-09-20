@@ -1,5 +1,40 @@
 # TODO
 
+## Buy/sell now confirmed working for un-indexed tokens (2026-09-20)
+
+The critical-path item — root-caused and fixed end-to-end, verified via
+direct API calls (both buy and sell now return `code: 10000` with a real
+built transaction for a token the consumer has never indexed):
+
+1. `CreateMarketOrder` required a DB `pair` row (via `GetPairInfoByToken`)
+   before it would even attempt to build a swap, hard-failing with 520 for
+   any un-indexed token. Added `chainsolana.DetectTokenSource`: probes
+   pump.fun then both pump-meteora builds on-chain for a matching
+   bonding-curve account, and falls back to it when the DB lookup misses.
+   Applied to both `CreateMarketOrder` and the trailing-stop executor's
+   `CreateMarketTx`.
+2. Root-caused via step-by-step probe logging that the fallback's own
+   on-chain reads (and `pkg/pumpfun/pump/meteora.go`'s account reads, one
+   step further into the pipeline) were themselves failing — not because
+   accounts don't exist, but because devnet RPC (even via Helius) rate-
+   limits aggressively enough that single-shot reads are unreliable.
+   Individually patching each call site as we hit each one was whack-a-mole,
+   so fixed it systemically instead: `trade/internal/chain/solana/rpc_retry.go`
+   wraps the trade service's whole Solana RPC client so every call retries
+   automatically (safe unconditionally — a real "not found" comes back as a
+   successful call with a nil value, never an error).
+3. Along the way, found and fixed the actual reason none of this was
+   debuggable: the consumer printed every transaction's full log messages
+   unconditionally, and every vote transaction (the overwhelming majority
+   of on-chain traffic) logged at ERROR level via a leaked loop variable.
+   Railway was silently dropping log messages from every service in the
+   deployment because of the volume ("Messages dropped: 148") — nothing
+   else could be debugged until this was fixed.
+
+**Not yet verified**: an actual signed buy/sell through the browser wallet
+(only the unsigned-tx-building step was tested directly via API, since this
+environment has no funded wallet or browser to complete a real signed send).
+
 ## Done this round, yet later (2026-09-20) — a hard RPC blocker
 
 Pasted browser console logs surfaced the real, structural cause behind a lot
