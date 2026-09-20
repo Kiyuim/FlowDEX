@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import TokenCard from './TokenCard';
-import ClmmPoolCard from './ClmmPoolCard';
 import useTokenListWebSocket from '../hooks/useTokenListWebSocket';
+import MockTokenWebSocket from './MockTokenWebSocket';
 import './TokenList.css';
 
 const API_BASE_URL = process.env.NODE_ENV === 'development' 
@@ -20,7 +20,6 @@ const TokenList = ({ onTokenSelect }) => {
   // CLMM state
   const [clmmV1Pools, setClmmV1Pools] = useState([]);
   const [clmmV2Pools, setClmmV2Pools] = useState([]);
-  const [solPriceUsd, setSolPriceUsd] = useState(0);
   
   // Common state
   const [loading, setLoading] = useState(false);
@@ -28,6 +27,7 @@ const TokenList = ({ onTokenSelect }) => {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [realtimeCount, setRealtimeCount] = useState(0);
   const [newTokenNotifications, setNewTokenNotifications] = useState([]);
+  const [mockMode, setMockMode] = useState(false);
   const intervalRef = useRef(null);
   const setupCountRef = useRef(0);
   const componentIdRef = useRef(Math.random().toString(36).substr(2, 9));
@@ -153,10 +153,28 @@ const TokenList = ({ onTokenSelect }) => {
         resCompleted.json()
       ]);
 
-      const newTokens = (dataNew?.data?.list) || [];
-      const completingTokens = (dataCompleting?.data?.list) || [];
-      const completedTokens = (dataCompleted?.data?.list) || [];
-      
+      const rawNew = (dataNew?.data?.list) || [];
+      const rawCompleting = (dataCompleting?.data?.list) || [];
+      const rawCompleted = (dataCompleted?.data?.list) || [];
+
+      // Dedup within each list and across tabs so a token only appears once, in
+      // its furthest stage (completed > completing > new). A token mid-migration
+      // can otherwise be returned by more than one status query.
+      const seen = new Set();
+      const dedup = (list) => {
+        const out = [];
+        for (const t of list) {
+          const addr = t.tokenAddress || t.token_ca || t.address;
+          if (!addr || seen.has(addr)) continue;
+          seen.add(addr);
+          out.push(t);
+        }
+        return out;
+      };
+      const completedTokens = dedup(rawCompleted);
+      const completingTokens = dedup(rawCompleting);
+      const newTokens = dedup(rawNew);
+
       setNewTokens(newTokens);
       setCompletingTokens(completingTokens);
       setCompletedTokens(completedTokens);
@@ -191,7 +209,6 @@ const TokenList = ({ onTokenSelect }) => {
         const pools = dataV1.data?.list || [];
         console.log('CLMM V1 pools fetched:', pools);
         setClmmV1Pools(pools);
-        if (dataV1.data?.solPriceUsd) setSolPriceUsd(dataV1.data.solPriceUsd);
       } else {
         console.error('CLMM V1 API error:', dataV1);
       }
@@ -200,7 +217,6 @@ const TokenList = ({ onTokenSelect }) => {
         const pools = dataV2.data?.list || [];
         console.log('CLMM V2 pools fetched:', pools);
         setClmmV2Pools(pools);
-        if (dataV2.data?.solPriceUsd) setSolPriceUsd(dataV2.data.solPriceUsd);
       } else {
         console.error('CLMM V2 API error:', dataV2);
       }
@@ -245,18 +261,94 @@ const TokenList = ({ onTokenSelect }) => {
     }
   };
 
-  // Each pool renders as one card (see ClmmPoolCard) — previously this split
-  // every pool into two synthetic "token" cards (one per side) and
-  // deduplicated by token address, which doesn't correspond to pool count at
-  // all (every pool quoted in wSOL collapsed onto one shared wSOL card) and
-  // produced a card grid with no sensible relationship to "V1: N | V2: M".
-  const allPools = [
-    ...clmmV1Pools.map(pool => ({ ...pool, poolVersion: pool.poolVersion || 1 })),
-    ...clmmV2Pools.map(pool => ({ ...pool, poolVersion: pool.poolVersion || 2 })),
+  // Transform CLMM pool data to extract individual token cards
+  const transformPoolToTokenFormat = (pool, version) => {
+    const tokens = [];
+    
+    // Helper function to get token name/symbol with fallbacks
+    const getTokenInfo = (mint, symbol) => {
+      if (symbol && symbol !== 'Unknown' && symbol.trim() !== '') {
+        return symbol;
+      }
+      // Use first 4 characters of mint address as fallback
+      return mint ? `${mint.slice(0, 4)}...${mint.slice(-4)}` : 'Token';
+    };
+    
+    // Create token card for input token
+    if (pool.inputVaultMint) {
+      const tokenName = getTokenInfo(pool.inputVaultMint, pool.inputTokenSymbol);
+      tokens.push({
+        tokenAddress: pool.inputVaultMint,
+        tokenName: tokenName,
+        tokenSymbol: tokenName,
+        tokenIcon: pool.inputTokenIcon || '/default-token.png',
+        launchTime: pool.launchTime,
+        mktCap: pool.liquidityUsd / 2 || 0, // Split liquidity between two tokens
+        holdCount: 0,
+        domesticProgress: pool.apr || 0,
+        twitterUsername: '',
+        telegram: '',
+        change24: 0,
+        pairAddress: pool.poolState,
+        tradeFeeRate: pool.tradeFeeRate,
+        poolVersion: version,
+        txs24h: pool.txs24h || 0,
+        vol24h: pool.vol24h || 0,
+        tokenType: 'CLMM'
+      });
+    }
+    
+    // Create token card for output token (only if it's different from input)
+    if (pool.outputVaultMint && pool.outputVaultMint !== pool.inputVaultMint) {
+      const tokenName = getTokenInfo(pool.outputVaultMint, pool.outputTokenSymbol);
+      tokens.push({
+        tokenAddress: pool.outputVaultMint,
+        tokenName: tokenName,
+        tokenSymbol: tokenName,
+        tokenIcon: pool.outputTokenIcon || '/default-token.png',
+        launchTime: pool.launchTime,
+        mktCap: pool.liquidityUsd / 2 || 0, // Split liquidity between two tokens
+        holdCount: 0,
+        domesticProgress: pool.apr || 0,
+        twitterUsername: '',
+        telegram: '',
+        change24: 0,
+        pairAddress: pool.poolState,
+        tradeFeeRate: pool.tradeFeeRate,
+        poolVersion: version,
+        txs24h: pool.txs24h || 0,
+        vol24h: pool.vol24h || 0,
+        tokenType: 'CLMM'
+      });
+    }
+    
+    return tokens;
+  };
+
+  // Flatten the pool data to get individual tokens
+  const allTokens = [
+    ...clmmV1Pools.flatMap(pool => {
+      console.log('Transforming V1 pool:', pool);
+      const tokens = transformPoolToTokenFormat(pool, 'V1');
+      console.log('Generated tokens from V1 pool:', tokens);
+      return tokens;
+    }),
+    ...clmmV2Pools.flatMap(pool => {
+      console.log('Transforming V2 pool:', pool);
+      const tokens = transformPoolToTokenFormat(pool, 'V2');
+      console.log('Generated tokens from V2 pool:', tokens);
+      return tokens;
+    })
   ];
-  const uniquePools = allPools.filter((pool, index, self) =>
-    index === self.findIndex(p => p.poolState === pool.poolState)
+
+  console.log('All CLMM tokens before deduplication:', allTokens);
+
+  // Remove duplicates based on token address
+  const uniqueTokens = allTokens.filter((token, index, self) => 
+    index === self.findIndex(t => t.tokenAddress === token.tokenAddress)
   );
+
+  console.log('Unique CLMM tokens after deduplication:', uniqueTokens);
 
   // Render PumpFun content
   const renderPumpFunContent = () => {
@@ -360,12 +452,12 @@ const TokenList = ({ onTokenSelect }) => {
       );
     }
 
-    if (uniquePools.length === 0) {
+    if (uniqueTokens.length === 0) {
       return (
         <div className="empty-state">
           <div className="empty-icon">🏊‍♂️</div>
-          <h3>No CLMM Pools Found</h3>
-          <p>No concentrated liquidity pools are currently available on devnet.</p>
+          <h3>No CLMM Tokens Found</h3>
+          <p>No concentrated liquidity tokens are currently available on devnet.</p>
           <button className="retry-btn" onClick={fetchPools}>
             🔄 Try Again
           </button>
@@ -376,22 +468,16 @@ const TokenList = ({ onTokenSelect }) => {
     return (
       <div className="token-section">
         <h3 className="section-title">
-          💧 CLMM Pools ({uniquePools.length})
+          💧 CLMM Tokens ({uniqueTokens.length})
         </h3>
         <div className="token-grid">
-          {uniquePools.map((pool) => (
-            <ClmmPoolCard
-              key={pool.poolState}
-              pool={pool}
-              solPriceUsd={solPriceUsd}
-              onClick={() => onTokenSelect?.({
-                tokenAddress: pool.outputVaultMint,
-                pairAddress: pool.poolState,
-                tokenName: pool.outputTokenSymbol,
-                tokenSymbol: pool.outputTokenSymbol,
-                tokenIcon: pool.outputTokenIcon,
-                tokenType: 'CLMM',
-              })}
+          {uniqueTokens.map((token, index) => (
+            <TokenCard
+              key={`${token.tokenAddress}-${index}`}
+              token={token}
+              onClick={() => onTokenSelect?.(token)}
+              showProgress={false}
+              customBadge={`CLMM ${token.poolVersion}`}
             />
           ))}
         </div>
@@ -459,6 +545,24 @@ const TokenList = ({ onTokenSelect }) => {
             🔄 Manual Refresh
           </button>
           
+          {activeTab === 'pumpfun' && (
+            <button 
+              onClick={() => setMockMode(!mockMode)}
+              style={{
+                background: mockMode ? 'linear-gradient(45deg, #ff6b35, #f7931e)' : '#333',
+                color: mockMode ? '#fff' : '#888',
+                border: '1px solid ' + (mockMode ? '#ff6b35' : '#555'),
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              {mockMode ? '🧪 Mock ON' : '🔌 Real Mode'}
+            </button>
+          )}
         </div>
 
         {/* New Token Notifications */}
@@ -494,6 +598,14 @@ const TokenList = ({ onTokenSelect }) => {
       {/* Content Area */}
       {activeTab === 'pumpfun' ? renderPumpFunContent() : renderClmmContent()}
       
+      {/* Mock WebSocket for testing (PumpFun only) */}
+      {activeTab === 'pumpfun' && (
+        <MockTokenWebSocket 
+          enabled={mockMode}
+          onNewToken={handleNewToken}
+          onTokenUpdate={handleTokenUpdate}
+        />
+      )}
     </div>
   );
 };

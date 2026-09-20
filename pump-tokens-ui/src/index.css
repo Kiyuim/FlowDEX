@@ -1,3 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body {
+    background: #0a0b0f;
+    color: #e7ebf3;
+    font-family: Inter, system-ui, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #232838; border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+}
+
+/* ---- legacy styles below (kept for existing components) ---- */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -15,6 +33,54 @@ body {
   max-width: 1400px;
   margin: 0 auto;
   padding: 20px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background-color: #111;
+  border-bottom: 1px solid #333;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: #00ff88;
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 30px;
+}
+
+.nav-tab {
+  padding: 10px 15px;
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 14px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.nav-tab.active {
+  color: #ffffff;
+  border-bottom-color: #00ff88;
+}
+
+.nav-tab:hover {
+  color: #ffffff;
+}
+
+.user-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
 
 .btn {

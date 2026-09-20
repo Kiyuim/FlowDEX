@@ -339,71 +339,9 @@
     padding-left: 8px;
     gap: 6px;
   }
-
+  
   .mock-btn {
     padding: 4px 8px;
     font-size: 11px;
   }
-}
-
-/* Click-to-inspect candle info popup */
-.candle-info-popup {
-  position: absolute;
-  z-index: 20;
-  min-width: 160px;
-  background: rgba(20, 20, 22, 0.96);
-  border: 1px solid #3a3a3a;
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 12px;
-  color: #d1d4dc;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-  pointer-events: auto;
-}
-
-.candle-info-close {
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  background: none;
-  border: none;
-  color: #888;
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0;
-}
-
-.candle-info-close:hover {
-  color: #fff;
-}
-
-.candle-info-time {
-  font-size: 11px;
-  color: #888;
-  margin-bottom: 6px;
-  padding-right: 14px;
-}
-
-.candle-info-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 1px 0;
-}
-
-.candle-info-row span:first-child {
-  color: #888;
-}
-
-.candle-info-row span:last-child {
-  font-variant-numeric: tabular-nums;
-}
-
-.candle-info-change.up span:last-child {
-  color: #00d4aa;
-}
-
-.candle-info-change.down span:last-child {
-  color: #ff6838;
 } 

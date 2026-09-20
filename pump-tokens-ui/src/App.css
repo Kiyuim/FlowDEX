@@ -14,77 +14,20 @@
   padding: 20px;
 }
 
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 10px 20px;
-  border-bottom: 1px solid #2a2a2a;
-}
-
-.app-header-left {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  min-width: 0;
-  flex: 1;
-}
-
-.app-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 20px;
-  font-weight: bold;
-  color: #00ff88;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.devnet-badge {
-  font-size: 11px;
-  font-weight: bold;
-  color: #00d4aa;
-  background: rgba(0, 212, 170, 0.12);
-  border: 1px solid rgba(0, 212, 170, 0.4);
-  border-radius: 10px;
-  padding: 2px 8px;
-  letter-spacing: 0.5px;
-}
-
 /* Tab Navigation */
 .tab-navigation {
   display: flex;
   gap: 8px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.tab-navigation::-webkit-scrollbar {
-  display: none;
-}
-
-.app-header-left > .tab-navigation {
-  flex-shrink: 1;
-  min-width: 0;
-}
-
-.tab-navigation .tab-btn {
-  flex-shrink: 0;
 }
 
 .tab-btn {
   background: #2a2a2a;
   border: 1px solid #3a3a3a;
   color: #ffffff;
-  padding: 8px 14px;
+  padding: 12px 20px;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   transition: all 0.2s ease;
   display: flex;

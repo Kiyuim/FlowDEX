@@ -11,13 +11,11 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
   const chartContainerRef = useRef();
   const chartRef = useRef();
   const candlestickSeriesRef = useRef();
-  const volumeByTimeRef = useRef({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [interval, setInterval] = useState('1h');
   const [wsConnection, setWsConnection] = useState(null);
   const mockIntervalRef = useRef(null);
-  const [clickedCandle, setClickedCandle] = useState(null);
 
   // Initialize chart
   useEffect(() => {
@@ -70,30 +68,6 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
 
       chartRef.current = chart;
       candlestickSeriesRef.current = candlestickSeries;
-
-      // Click-to-inspect (GMGN-style): show OHLCV for the clicked candle in
-      // a small floating card positioned at the click point.
-      chart.subscribeClick((param) => {
-        if (!param.time || !param.point) {
-          setClickedCandle(null);
-          return;
-        }
-        const data = param.seriesData.get(candlestickSeries);
-        if (!data) {
-          setClickedCandle(null);
-          return;
-        }
-        setClickedCandle({
-          time: param.time,
-          open: data.open,
-          high: data.high,
-          low: data.low,
-          close: data.close,
-          volume: volumeByTimeRef.current[param.time] || 0,
-          x: param.point.x,
-          y: param.point.y,
-        });
-      });
 
       // Handle resize
       const handleResize = () => {
@@ -245,14 +219,22 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
     
     if (!token?.pairAddress) return;
 
+    // Guards so the reconnect loop can't outlive this effect.
+    let cancelled = false;
+    let reconnectTimer = null;
+    let activeWs = null;
+
     const connectWebSocket = () => {
       try {
-        // Kline WebSocket. NOTE: no backend currently serves this (legacy :8085) — set
-        // REACT_APP_KLINE_WS_URL only if/when a kline WS service is deployed.
+        // Kline WebSocket, served by the websocket service on /ws/kline (it
+        // subscribes to the Redis kline:updates channel that dataflow publishes).
+        // Set REACT_APP_KLINE_WS_URL to the websocket service origin, e.g.
+        // wss://websocket-production-3acc.up.railway.app
         const KLINE_BASE = process.env.REACT_APP_KLINE_WS_URL
           || (window.location.hostname === 'localhost' ? 'ws://localhost:8085' : `wss://${window.location.hostname}`);
         const wsUrl = `${KLINE_BASE.replace(/\/$/, '')}/ws/kline?pair_address=${token.pairAddress}&chain_id=100000&interval=${interval}`;
         const ws = new WebSocket(wsUrl);
+        activeWs = ws;
 
         ws.onopen = () => {
           console.log('WebSocket connected for kline updates');
@@ -363,8 +345,12 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         ws.onclose = () => {
           console.log('WebSocket connection closed');
           setWsConnection(null);
-          // Reconnect after a delay
-          setTimeout(connectWebSocket, 5000);
+          // Reconnect after a delay, but only if this effect is still active.
+          // The handle is tracked so cleanup can cancel it — otherwise a pending
+          // reconnect fires after unmount and creates an orphan socket.
+          if (!cancelled) {
+            reconnectTimer = setTimeout(connectWebSocket, 5000);
+          }
         };
 
         return ws;
@@ -374,24 +360,26 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
       }
     };
 
-    const ws = connectWebSocket();
+    connectWebSocket();
 
-    // Cleanup function
+    // Cleanup: stop reconnecting and close whatever socket is current. Closing
+    // only on readyState === OPEN would leak sockets still in CONNECTING.
     return () => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.close();
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (activeWs) {
+        activeWs.onclose = null; // don't let our own teardown schedule a reconnect
+        activeWs.close();
       }
     };
   }, [token?.pairAddress, visible, interval, mockMode]);
 
-  // Cleanup WebSocket on unmount
-  useEffect(() => {
-    return () => {
-      if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-        wsConnection.close();
-      }
-    };
-  }, [wsConnection]);
+  // NOTE: there used to be a second `useEffect(..., [wsConnection])` here whose
+  // cleanup closed the socket. Because onopen calls setWsConnection(ws), that
+  // cleanup ran on every successful connect and immediately closed the socket it
+  // had just opened — onclose then scheduled a 5s reconnect, producing an endless
+  // connect/close cycle in the console. The effect above already owns the
+  // socket's whole lifecycle, so no separate unmount cleanup is needed.
 
   // Fetch kline data
   const fetchKlineData = async (selectedInterval = interval) => {
@@ -411,23 +399,15 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
 
     try {
       const now = Math.floor(Date.now() / 1000);
-      // Lookback window scales with candle size so wider intervals actually
-      // show multiple days of history instead of always requesting the same
-      // last-24h window (which, at 1d granularity, could only ever return
-      // ~1 candle no matter how much history the backend actually had).
-      const INTERVAL_SECONDS = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '12h': 43200, '1d': 86400 };
-      const intervalSeconds = INTERVAL_SECONDS[selectedInterval] || 3600;
-      const limit = 100;
-      const lookbackSeconds = intervalSeconds * limit;
-      const fromTimestamp = now - lookbackSeconds;
+      const oneDayAgo = now - (24 * 60 * 60); // 24 hours ago
 
       const params = new URLSearchParams({
         chain_id: 100000,
         pair_address: token.pairAddress,
         interval: selectedInterval,
-        from_timestamp: fromTimestamp,
+        from_timestamp: oneDayAgo,
         to_timestamp: now,
-        limit,
+        limit: 100,
       });
 
       const response = await fetch(`${API_URL}/v1/market/get_candlestick?${params}`, {
@@ -447,7 +427,6 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
 
       // Transform the data for TradingView
       const klineData = data.data?.list || data.list || [];
-      const volumeByTime = {};
       const chartData = klineData
         .map(kline => {
           const open = parseFloat(kline.open || kline.Open || 0);
@@ -455,14 +434,12 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
           const low = parseFloat(kline.low || kline.Low || 0);
           const close = parseFloat(kline.close || kline.Close || 0);
           const time = parseInt(kline.candle_time || kline.candleTime || kline.CandleTime || 0);
-          const volume = parseFloat(kline.volume_token || kline.volumeToken || kline.VolumeToken || 0);
 
           if (!time || !open || !high || !low || !close) {
             console.warn('Skipping invalid kline data:', kline);
             return null;
           }
 
-          volumeByTime[time] = volume;
           return {
             time: time,
             open: open,
@@ -473,9 +450,6 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         })
         .filter(item => item !== null)
         .sort((a, b) => a.time - b.time);
-
-      volumeByTimeRef.current = volumeByTime;
-      setClickedCandle(null);
 
       console.log('Transformed chart data:', chartData);
 
@@ -597,55 +571,16 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         </div>
       )}
 
-      <div style={{ position: 'relative' }}>
-        <div
-          ref={chartContainerRef}
-          className="chart-container"
-          style={{
-            position: 'relative',
-            width: '100%',
-            height: '400px',
-            opacity: isLoading ? 0.6 : 1,
-          }}
-        />
-
-        {clickedCandle && (
-          <div
-            className="candle-info-popup"
-            style={{
-              left: Math.min(clickedCandle.x + 12, (chartContainerRef.current?.clientWidth || 400) - 180),
-              top: Math.max(clickedCandle.y - 12, 8),
-            }}
-          >
-            <button
-              className="candle-info-close"
-              onClick={() => setClickedCandle(null)}
-              aria-label="Close"
-            >
-              ×
-            </button>
-            <div className="candle-info-time">
-              {new Date(clickedCandle.time * 1000).toLocaleString()}
-            </div>
-            <div className="candle-info-row"><span>O</span><span>{clickedCandle.open.toFixed(8)}</span></div>
-            <div className="candle-info-row"><span>H</span><span>{clickedCandle.high.toFixed(8)}</span></div>
-            <div className="candle-info-row"><span>L</span><span>{clickedCandle.low.toFixed(8)}</span></div>
-            <div className="candle-info-row"><span>C</span><span>{clickedCandle.close.toFixed(8)}</span></div>
-            <div className="candle-info-row">
-              <span>Vol</span>
-              <span>{clickedCandle.volume >= 1000 ? `${(clickedCandle.volume / 1000).toFixed(1)}K` : clickedCandle.volume.toFixed(2)}</span>
-            </div>
-            <div className={`candle-info-row candle-info-change ${clickedCandle.close >= clickedCandle.open ? 'up' : 'down'}`}>
-              <span>Chg</span>
-              <span>
-                {clickedCandle.open > 0
-                  ? `${(((clickedCandle.close - clickedCandle.open) / clickedCandle.open) * 100).toFixed(2)}%`
-                  : '—'}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
+      <div 
+        ref={chartContainerRef} 
+        className="chart-container"
+        style={{ 
+          position: 'relative',
+          width: '100%',
+          height: '400px',
+          opacity: isLoading ? 0.6 : 1,
+        }}
+      />
 
       {/* Real-time connection status */}
       <div className="connection-status">

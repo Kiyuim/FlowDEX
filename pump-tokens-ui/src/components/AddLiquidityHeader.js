@@ -88,18 +88,18 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
     try {
       setIsLoading(true);
       // Find the pool in the already fetched pools
-      const pool = pools.find(p => p.poolState === poolId);
+      const pool = pools.find(p => p.pool_state === poolId);
       
       if (pool) {
         setPoolInfo({
-          id: pool.poolState,
+          id: pool.pool_state,
           tokenA: {
-            symbol: pool.inputTokenSymbol || 'Token A',
-            address: pool.inputVaultMint
+            symbol: pool.token0_symbol || 'Token A',
+            address: pool.token0_mint
           },
           tokenB: {
-            symbol: pool.outputTokenSymbol || 'Token B',
-            address: pool.outputVaultMint
+            symbol: pool.token1_symbol || 'Token B',
+            address: pool.token1_mint
           },
           price: pool.price || 1,
           minPrice: pool.price * 0.5, // Example - use actual min from API
@@ -124,7 +124,7 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
       setError('');
       
       // Try to find the pool in already fetched pools first
-      const existingPool = pools.find(p => p.poolState === address);
+      const existingPool = pools.find(p => p.pool_state === address);
       
       if (existingPool) {
         setSelectedPool(address);
@@ -149,12 +149,12 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
           setPoolInfo({
             id: address,
             tokenA: {
-              symbol: pool.inputTokenSymbol || 'Token A',
-              address: pool.inputVaultMint
+              symbol: pool.token0_symbol || 'Token A',
+              address: pool.token0_mint
             },
             tokenB: {
-              symbol: pool.outputTokenSymbol || 'Token B',
-              address: pool.outputVaultMint
+              symbol: pool.token1_symbol || 'Token B',
+              address: pool.token1_mint
             },
             price: pool.price || 1,
             minPrice: pool.price * 0.5,
@@ -340,8 +340,8 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
             >
               <option value="">Select a pool</option>
               {pools.map(pool => (
-                <option key={pool.poolState} value={pool.poolState}>
-                  {pool.inputTokenSymbol}/{pool.outputTokenSymbol}
+                <option key={pool.pool_state} value={pool.pool_state}>
+                  {pool.token0_symbol}/{pool.token1_symbol}
                 </option>
               ))}
             </select>
@@ -361,7 +361,7 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
               onChange={(e) => setManualPoolAddress(e.target.value)}
               placeholder="Enter pool address (e.g., Bevpu2aknCe7ZotQDRy2LgbG1gtU8S1BFwcpLPziy8af)"
             />
-          {/* 自动获取Token信息按钮和展示 */}
+          {/* Auto-fetch Token Info按钮和展示 */}
           <button
               type="button"
               style={{
@@ -389,7 +389,7 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
                   const poolPubkey = new PublicKey(manualPoolAddress.trim());
                   const accountInfo = await connection.getAccountInfo(poolPubkey);
                   if (!accountInfo || !accountInfo.data) {
-                    setError('未找到该池子账户或数据为空');
+                    setError('Pool account not found or data is empty');
                     setAutoFetchLoading(false);
                     return;
                   }
@@ -402,9 +402,9 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
                   setAutoTokenB(tokenMint1Pubkey);
                   setManualTokenAAddress(tokenMint0Pubkey);
                   setManualTokenBAddress(tokenMint1Pubkey);
-                  setError('自动获取成功，已填入Token地址');
+                  setError('Auto-fetch successful, token addresses filled in');
                 } catch (e) {
-                  setError('获取池子Token信息失败: ' + e.message);
+                  setError('Failed to fetch pool token info: ' + e.message);
                 }
                 setAutoFetchLoading(false);
               }}
@@ -412,9 +412,9 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
                  {autoFetchLoading ? (
                 <span style={{ display: 'inline-flex', alignItems: 'center' }}>
                   <span className="loading-spinner" style={{ width: 18, height: 18, borderWidth: 3, marginRight: 8, borderTopColor: '#fff' }} />
-                  获取中...
+                  Fetching...
                 </span>
-              ) : '自动获取Token信息'}
+              ) : 'Auto-fetch Token Info'}
             </button>
             <div style={{ fontSize: 12, marginBottom: 8 }}>
               {autoTokenA && <>
@@ -424,13 +424,13 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
                 Token Mint 1: <span style={{ color: '#333' }}>{autoTokenB}</span>
               </>}
               {error && error.startsWith('auto-success') && (
-                <div style={{ color: '#2e7d32', marginTop: 4 }}>自动获取成功，已填入Token地址</div>
+                <div style={{ color: '#2e7d32', marginTop: 4 }}>Auto-fetch successful, token addresses filled in</div>
               )}
               {error && error.startsWith('auto-fail:') && (
-                <div style={{ color: '#d32f2f', marginTop: 4 }}>获取池子Token信息失败: {error.replace('auto-fail:', '')}</div>
+                <div style={{ color: '#d32f2f', marginTop: 4 }}>Failed to fetch pool token info: {error.replace('auto-fail:', '')}</div>
               )}
             </div>
-            {/* 原有手动池子详情输入区域 */}
+            {/* Manual pool details input (existing) */}
 
 
             

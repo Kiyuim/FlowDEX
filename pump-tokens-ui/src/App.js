@@ -1,14 +1,22 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import Header from './components/Header';
 import TokenList from './components/TokenList';
 import TradingViewChart from './components/TradingViewChart';
 import WalletDebugger from './components/WalletDebugger';
 import TokenCreation from './components/TokenCreation';
-import PoolHub from './components/PoolHub';
-import Sources from './components/Sources';
-import Portfolio from './components/Portfolio';
+import PoolCreation from './components/PoolCreation';
+import AddLiquidity from './components/AddLiquidity';
 import Faucet from './components/Faucet'; // Added Faucet import
 import TokenSecurity from './components/TokenSecurity'; // Added TokenSecurity import
 import './App.css';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import Discovery from './pages/Discovery';
+import TokenDetail from './pages/TokenDetail';
+import Pools from './pages/Pools';
+import Portfolio from './pages/Portfolio';
+import TokenSource from './pages/TokenSource';
 import { ConnectionProvider, WalletProvider, useWallet } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { 
@@ -45,20 +53,17 @@ const getRpcEndpoint = () => {
     return process.env.REACT_APP_SOLANA_RPC_URL;
   }
   
-  // Use Helius devnet (same as backend configuration)
-  // This matches the RPC endpoint used in trade service config
-  const heliusApiKey = process.env.REACT_APP_HELIUS_API_KEY || '2d7580ca-93d2-4404-9316-656c2726a26a';
-  const heliusEndpoint = `https://devnet.helius-rpc.com/?api-key=${heliusApiKey}`;
-  
-  // Fallback endpoints (in order of preference)
-  const fallbackEndpoints = [
-    'https://api.devnet.solana.com',  // Official Solana devnet
-    'https://solana-devnet-rpc.allthatnode.com',  // AllThatNode public RPC
-    'https://rpc.ankr.com/solana_devnet',  // Ankr public RPC
-  ];
-  
-  // Use Helius as primary endpoint (more reliable)
-  return heliusEndpoint;
+  // Optional Helius key (only used if explicitly provided and valid).
+  const heliusApiKey = process.env.REACT_APP_HELIUS_API_KEY;
+  if (heliusApiKey) {
+    return `https://devnet.helius-rpc.com/?api-key=${heliusApiKey}`;
+  }
+
+  // Default to the public Solana devnet RPC. It needs no API key and is what the
+  // wallet uses to fetch a blockhash and submit the buy. (The previously
+  // hard-coded Helius key returned 401 Invalid API key, which surfaced in the
+  // wallet as a generic "Internal error" on send.)
+  return 'https://api.devnet.solana.com';
 };
 
 const endpoint = getRpcEndpoint();
@@ -82,50 +87,44 @@ const WalletListDebugger = () => {
 const CustomWalletButton = () => {
   const { wallets, select, connect, connecting, connected, disconnect, publicKey, wallet } = useWallet();
   const [showModal, setShowModal] = useState(false);
-  // select() updates `wallet` asynchronously (next render), so calling
-  // connect() synchronously right after select() sees the OLD wallet (still
-  // null) and throws WalletNotSelectedError — that's why the first click
-  // always failed and the second (where `wallet` was already set) worked.
-  // useLayoutEffect fires as soon as `wallet` actually updates, still inside
-  // the same paint cycle as the click, so it doesn't break wallet popup
-  // "user gesture" heuristics the way a setTimeout/useEffect delay would.
-  const pendingConnectRef = useRef(false);
+  const [drag, setDrag] = useState({ x: 0, y: 0 });
+
+  // Drag the modal by its header (pointer events → works for mouse + touch).
+  const startDrag = useCallback(
+    (e) => {
+      if (e.target.closest('button')) return; // don't drag when clicking the close button
+      e.preventDefault();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const orig = { ...drag };
+      const move = (ev) =>
+        setDrag({ x: orig.x + (ev.clientX - startX), y: orig.y + (ev.clientY - startY) });
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    },
+    [drag]
+  );
 
   const handleConnect = () => {
+    setDrag({ x: 0, y: 0 });
     setShowModal(true);
   };
 
-  const doConnect = async () => {
-    try {
-      console.log('🔗 Connecting to wallet:', wallet?.adapter?.name);
-      await connect();
-      console.log('✅ Connect promise resolved');
-    } catch (connectError) {
-      console.error('❌ Error connecting wallet:', connectError);
-      const errorMessage = connectError?.message?.toLowerCase() || '';
-      const errorName = connectError?.name || '';
-
-      if (errorMessage.includes('user rejected') ||
-          errorMessage.includes('user cancelled') ||
-          errorMessage.includes('user denied') ||
-          errorName === 'WalletConnectionError' ||
-          errorName === 'WalletNotConnectedError') {
-        console.log('ℹ️ User rejected or cancelled the connection');
-        alert('Connection was cancelled. Please try again if you want to connect.');
-      } else {
-        alert(`Failed to connect wallet: ${connectError.message || 'Unknown error'}. Please try again.`);
-        setShowModal(true);
-      }
+  // Wallet-standard bridges can register wallets that aren't actually usable:
+  // Solflare's extension advertises a "MetaMask" wallet (its MetaMask-Snap
+  // bridge) with readyState "Installed" even when the MetaMask extension
+  // itself is absent — connecting then throws "MetaMask extension not found".
+  // Only list MetaMask when the real extension is present.
+  const visibleWallets = wallets.filter((w) => {
+    if (w.adapter.name === 'MetaMask') {
+      return typeof window !== 'undefined' && window.ethereum?.isMetaMask === true;
     }
-  };
-
-  useLayoutEffect(() => {
-    if (pendingConnectRef.current && wallet && !connected && !connecting) {
-      pendingConnectRef.current = false;
-      doConnect();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wallet, connected, connecting]);
+    return true;
+  });
 
   const handleSelectWallet = async (walletName, event) => {
     // Prevent event propagation
@@ -133,10 +132,10 @@ const CustomWalletButton = () => {
       event.preventDefault();
       event.stopPropagation();
     }
-
+    
     try {
       console.log('🔌 Selecting wallet:', walletName);
-
+      
       // Find the wallet adapter
       const selectedWallet = wallets.find(w => w.adapter.name === walletName);
       if (!selectedWallet) {
@@ -144,38 +143,34 @@ const CustomWalletButton = () => {
         alert(`Wallet ${walletName} not found. Please refresh the page.`);
         return;
       }
-
+      
       console.log('📋 Wallet adapter found:', {
         name: selectedWallet.adapter.name,
         readyState: selectedWallet.readyState,
         adapter: selectedWallet.adapter
       });
-
+      
       // Check if wallet adapter is actually available
       if (selectedWallet.readyState === 'NotDetected') {
         console.warn('⚠️ Wallet not detected, opening install page');
         window.open(getInstallUrl(walletName), '_blank');
         return;
       }
-
-      // Select the wallet, then let the useLayoutEffect above call connect()
-      // once `wallet` has actually updated to this new selection. But if
-      // this wallet was ALREADY selected (e.g. wallet-adapter restored it
-      // from localStorage on mount), select() is a no-op and `wallet`'s
-      // reference never changes — the effect would then never re-fire and
-      // the pending connect would sit unconsumed forever (clicking Solflare
-      // would "select" it again but nothing would visibly happen). Connect
-      // immediately in that case instead of waiting for a change that isn't
-      // coming.
-      const alreadySelected = wallet?.adapter?.name === walletName;
+      
+      // Two constraints pull in opposite directions here:
+      //  - the hook's connect() reads the selected wallet from React state,
+      //    which select() only schedules — same-tick connect() throws
+      //    WalletNotSelectedError;
+      //  - deferring connect() to an effect breaks the click's user-gesture
+      //    chain, and Solflare then auto-rejects ("Connection rejected")
+      //    because its popup gets blocked outside a gesture.
+      // Calling the adapter's connect() directly satisfies both: it doesn't
+      // depend on React state, and it runs inside the click. select() still
+      // updates the provider, which syncs connected/publicKey from the
+      // adapter's connect event.
       try {
         select(walletName);
         console.log('✅ Wallet selected:', walletName);
-        if (alreadySelected) {
-          doConnect();
-        } else {
-          pendingConnectRef.current = true;
-        }
       } catch (selectError) {
         console.error('❌ Error selecting wallet:', selectError);
         alert(`Failed to select wallet: ${selectError.message}`);
@@ -183,8 +178,38 @@ const CustomWalletButton = () => {
       }
 
       setShowModal(false);
+
+      try {
+        console.log('🔗 Connecting to wallet (adapter):', walletName);
+        if (!selectedWallet.adapter.connected) {
+          await selectedWallet.adapter.connect();
+        }
+        console.log('✅ Wallet connected:', selectedWallet.adapter.publicKey?.toString());
+      } catch (connectError) {
+        console.error('❌ Error connecting wallet:', connectError);
+        const errorMessage = connectError?.message?.toLowerCase() || '';
+        const errorName = connectError?.name || '';
+        if (
+          errorMessage.includes('user rejected') ||
+          errorMessage.includes('user cancelled') ||
+          errorMessage.includes('user denied') ||
+          errorMessage.includes('connection rejected') ||
+          errorName === 'WalletNotConnectedError'
+        ) {
+          console.log('ℹ️ User rejected or cancelled the connection');
+          alert('Connection was cancelled. Please try again if you want to connect.');
+        } else {
+          alert(`Failed to connect wallet: ${connectError?.message || 'Unknown error'}. Please try again.`);
+          setShowModal(true);
+        }
+      }
     } catch (error) {
       console.error('❌ Error selecting wallet:', error);
+      console.error('❌ Error details:', {
+        message: error?.message,
+        name: error?.name,
+        stack: error?.stack
+      });
       alert(`Error: ${error.message || 'Unknown error'}`);
       setShowModal(true); // Reopen modal on error
     }
@@ -248,13 +273,11 @@ const CustomWalletButton = () => {
       <button
         disabled
         style={{
-          padding: '8px 14px',
-          fontSize: '13px',
-          fontWeight: 600,
+          padding: '8px 16px',
           backgroundColor: '#999',
           color: 'white',
           border: 'none',
-          borderRadius: '8px',
+          borderRadius: '4px',
           cursor: 'not-allowed'
         }}
       >
@@ -272,19 +295,17 @@ const CustomWalletButton = () => {
     });
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ fontSize: '13px', fontWeight: 600, color: '#512DA8' }}>
+        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#512DA8' }}>
           {wallet?.adapter?.name || 'Wallet'}: {publicKey.toString().slice(0, 4)}...{publicKey.toString().slice(-4)}
         </span>
-        <button
+        <button 
           onClick={disconnect}
           style={{
-            padding: '8px 14px',
-            fontSize: '13px',
-            fontWeight: 600,
+            padding: '8px 16px',
             backgroundColor: '#ff4444',
             color: 'white',
             border: 'none',
-            borderRadius: '8px',
+            borderRadius: '4px',
             cursor: 'pointer'
           }}
         >
@@ -300,13 +321,11 @@ const CustomWalletButton = () => {
         onClick={handleConnect}
         disabled={connecting}
         style={{
-          padding: '8px 14px',
-          fontSize: '13px',
-          fontWeight: 600,
+          padding: '8px 16px',
           backgroundColor: '#512DA8',
           color: 'white',
           border: 'none',
-          borderRadius: '8px',
+          borderRadius: '4px',
           cursor: connecting ? 'not-allowed' : 'pointer',
           opacity: connecting ? 0.6 : 1
         }}
@@ -314,7 +333,7 @@ const CustomWalletButton = () => {
         {connecting ? 'Connecting...' : 'Connect Wallet'}
       </button>
 
-      {showModal && (
+      {showModal && createPortal(
         <div
           style={{
             position: 'fixed',
@@ -337,12 +356,17 @@ const CustomWalletButton = () => {
               padding: '24px',
               maxWidth: '500px',
               width: '90%',
-              maxHeight: '80vh',
-              overflowY: 'auto'
+              maxHeight: '85vh',
+              overflowY: 'auto',
+              transform: `translate(${drag.x}px, ${drag.y}px)`,
+              boxShadow: '0 24px 60px -20px rgba(0,0,0,0.7)'
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <div
+              onPointerDown={startDrag}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', cursor: 'move', touchAction: 'none', userSelect: 'none' }}
+            >
               <h2 style={{ margin: 0 }}>Select Wallet</h2>
               <button
                 onClick={() => setShowModal(false)}
@@ -359,7 +383,7 @@ const CustomWalletButton = () => {
             </div>
             
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
-              {wallets.map((wallet) => {
+              {visibleWallets.map((wallet) => {
                 const isInstalled = wallet.readyState === 'Installed';
                 const isLoadable = wallet.readyState === 'Loadable';
                 const canConnect = isInstalled || isLoadable;
@@ -444,7 +468,8 @@ const CustomWalletButton = () => {
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
@@ -452,12 +477,7 @@ const CustomWalletButton = () => {
 
 function App() {
   const [selectedToken, setSelectedToken] = useState(null);
-  const VALID_TABS = ['tokens', 'chart', 'sources', 'portfolio', 'create-token', 'pool', 'faucet', 'token-security'];
-  const tabFromHash = () => {
-    const h = window.location.hash.replace(/^#/, '');
-    return VALID_TABS.includes(h) ? h : 'tokens';
-  };
-  const [activeTab, setActiveTab] = useState(tabFromHash);
+  const [activeTab, setActiveTab] = useState('tokens');
   const [showDebugger, setShowDebugger] = useState(false);
 
   // Initialize wallets with useMemo for proper React optimization
@@ -514,30 +534,12 @@ function App() {
     console.log(`[${new Date().toLocaleTimeString()}] 🎯 Token selected:`, token?.tokenName, 'switching to chart tab');
     setSelectedToken(token);
     setActiveTab('chart');
-    if (window.location.hash.replace(/^#/, '') !== 'chart') {
-      window.location.hash = 'chart';
-    }
   };
 
   const handleTabSwitch = (tab) => {
     console.log(`[${new Date().toLocaleTimeString()}] 🔀 Tab switching from`, activeTab, 'to', tab);
     setActiveTab(tab);
-    if (window.location.hash.replace(/^#/, '') !== tab) {
-      window.location.hash = tab;
-    }
   };
-
-  // Browser back/forward should move between tabs, not just do nothing —
-  // tab switches previously only touched React state, so there was no
-  // history entry for the browser's back/forward buttons to move through.
-  useEffect(() => {
-    const handleHashChange = () => {
-      setActiveTab(tabFromHash());
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Track tab changes
   useEffect(() => {
@@ -561,95 +563,104 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showDebugger]);
 
+  const NAV = [
+    ['/', 'Tokens'],
+    ['/source', 'Sources'],
+    ['/portfolio', 'Portfolio'],
+    ['/create', 'Create'],
+    ['/pools', 'Pools'],
+    ['/faucet', 'Faucet'],
+    ['/security', 'Security'],
+  ];
+
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect={true}>
         <WalletModalProvider>
-          <WalletListDebugger />
-          <div>
-            <header className="app-header">
-              <div className="app-header-left">
-                <div className="app-brand">
-                  <span>◆ FlowDEX</span>
-                  <span className="devnet-badge">DEVNET</span>
+          <BrowserRouter>
+            <Toaster
+              position="bottom-right"
+              toastOptions={{
+                style: { background: '#141722', color: '#e7ebf3', border: '1px solid #232838' },
+              }}
+            />
+            <WalletListDebugger />
+            <div className="min-h-screen bg-bg text-ink">
+              <header className="sticky top-0 z-30 border-b border-border bg-bg-soft/80 backdrop-blur">
+                <div className="mx-auto flex max-w-7xl items-center gap-3 px-3 py-2.5 md:px-6">
+                  <Link to="/" className="flex items-center gap-2 font-bold text-ink">
+                    <span className="text-accent text-lg">◆</span>
+                    <span className="hidden sm:inline">FlowDEX</span>
+                  </Link>
+                  <span className="rounded-full border border-warn/40 bg-warn/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warn">
+                    Devnet
+                  </span>
+                  <nav className="ml-2 hidden items-center gap-1 md:flex">
+                    {NAV.map(([to, label]) => (
+                      <Link
+                        key={to}
+                        to={to}
+                        className="rounded-md px-3 py-1.5 text-sm text-muted hover:bg-bg-hover hover:text-ink"
+                      >
+                        {label}
+                      </Link>
+                    ))}
+                  </nav>
+                  <div className="ml-auto">
+                    <CustomWalletButton />
+                  </div>
                 </div>
-                <div className="tab-navigation">
-                  <button
-                    className={`tab-btn ${activeTab === 'tokens' ? 'active' : ''}`}
-                    onClick={() => handleTabSwitch('tokens')}
-                  >
-                    🪙 Tokens
-                  </button>
-                  <button
-                    className={`tab-btn ${activeTab === 'sources' ? 'active' : ''}`}
-                    onClick={() => handleTabSwitch('sources')}
-                  >
-                    📁 Sources
-                  </button>
-                  <button
-                    className={`tab-btn ${activeTab === 'portfolio' ? 'active' : ''}`}
-                    onClick={() => handleTabSwitch('portfolio')}
-                  >
-                    👤 Portfolio
-                  </button>
-                  <button
-                    className={`tab-btn ${activeTab === 'create-token' ? 'active' : ''}`}
-                    onClick={() => handleTabSwitch('create-token')}
-                  >
-                    🪙 Create
-                  </button>
-                  <button
-                    className={`tab-btn ${activeTab === 'pool' ? 'active' : ''}`}
-                    onClick={() => handleTabSwitch('pool')}
-                  >
-                    🏊 Pools
-                  </button>
-                  <button
-                    className={`tab-btn ${activeTab === 'faucet' ? 'active' : ''}`}
-                    onClick={() => handleTabSwitch('faucet')}
-                  >
-                    🚰 Faucet
-                  </button>
-                  <button
-                    className={`tab-btn ${activeTab === 'token-security' ? 'active' : ''}`}
-                    onClick={() => handleTabSwitch('token-security')}
-                  >
-                    🛡️ Security
-                  </button>
-                </div>
-              </div>
-              <CustomWalletButton />
-            </header>
+                <nav className="flex gap-1 overflow-x-auto border-t border-border px-3 py-1.5 md:hidden">
+                  {NAV.map(([to, label]) => (
+                    <Link
+                      key={to}
+                      to={to}
+                      className="whitespace-nowrap rounded-md px-3 py-1 text-sm text-muted hover:text-ink"
+                    >
+                      {label}
+                    </Link>
+                  ))}
+                </nav>
+              </header>
 
-            <main>
-              {activeTab === 'tokens' && (
-                <TokenList onTokenSelect={handleTokenSelect} />
-              )}
-              {activeTab === 'chart' && selectedToken && (
-                <TradingViewChart token={selectedToken} />
-              )}
-              {activeTab === 'create-token' && (
-                <TokenCreation />
-              )}
-              {activeTab === 'pool' && (
-                <PoolHub />
-              )}
-              {activeTab === 'sources' && (
-                <Sources onTokenSelect={handleTokenSelect} />
-              )}
-              {activeTab === 'portfolio' && (
-                <Portfolio onTokenSelect={handleTokenSelect} />
-              )}
-              {activeTab === 'faucet' && (
-                <Faucet />
-              )}
-              {activeTab === 'token-security' && (
-                <TokenSecurity />
-              )}
-            </main>
-            
-            <WalletDebugger isVisible={showDebugger} />
-          </div>
+              <main>
+                <Routes>
+                  <Route path="/" element={<Discovery />} />
+                  <Route path="/source" element={<TokenSource />} />
+                  <Route path="/token/:mint" element={<TokenDetail />} />
+                  <Route path="/portfolio" element={<Portfolio />} />
+                  <Route
+                    path="/create"
+                    element={
+                      <div className="mx-auto max-w-4xl px-3 py-4 md:px-6">
+                        <TokenCreation />
+                      </div>
+                    }
+                  />
+                  <Route path="/pools" element={<Pools />} />
+                  <Route
+                    path="/faucet"
+                    element={
+                      <div className="mx-auto max-w-3xl px-3 py-4 md:px-6">
+                        <Faucet />
+                      </div>
+                    }
+                  />
+                  <Route
+                    path="/security"
+                    element={
+                      <div className="mx-auto max-w-3xl px-3 py-4 md:px-6">
+                        <TokenSecurity />
+                      </div>
+                    }
+                  />
+                  <Route path="*" element={<Discovery />} />
+                </Routes>
+              </main>
+
+              <WalletDebugger isVisible={showDebugger} />
+            </div>
+          </BrowserRouter>
         </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>

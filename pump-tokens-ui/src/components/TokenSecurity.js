@@ -1,11 +1,20 @@
 import React, { useState } from 'react';
-import './TokenSecurity.css';
 
-const API_URL = process.env.NODE_ENV === 'development' 
-  ? '/v1/market/token_security_check' // Use proxy in development
-  : '/direct-api/v1/market/token_security_check'; // Use Nginx proxy in production
+const API_URL =
+  process.env.NODE_ENV === 'development'
+    ? '/v1/market/token_security_check'
+    : '/direct-api/v1/market/token_security_check';
 
-const TokenSecurity = () => {
+function Row({ label, children }) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-t border-border/60 py-2 text-sm">
+      <span className="text-muted">{label}</span>
+      <span className="break-all text-right font-mono text-ink">{children}</span>
+    </div>
+  );
+}
+
+export default function TokenSecurity() {
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -35,42 +44,55 @@ const TokenSecurity = () => {
     }
   };
 
+  const badge = (ok) => (
+    <span className={ok ? 'text-up' : 'text-down'}>{ok ? 'Safe' : 'Risk'}</span>
+  );
+
   return (
-    <div className="token-security-container">
-      <div className="token-security-card">
-        <div className="card-header">
-          <h2>🛡️ Token Security Check</h2>
-          <p>Enter a Solana SPL Token Mint address to check its security status.</p>
-        </div>
-        <form className="search-form" onSubmit={handleSubmit}>
-          <input
-            className="search-input"
-            type="text"
-            placeholder="Enter token mint address..."
-            value={address}
-            onChange={e => setAddress(e.target.value)}
-            disabled={loading}
-          />
-          <button className="search-btn" type="submit" disabled={loading}>
-            {loading ? 'Checking...' : 'Check'}
-          </button>
-        </form>
-        {error && <div className="error-message">{error}</div>}
-        {result && (
-          <div className="result-section">
-            <div className="result-row"><span className="label">Mint Address:</span> <span className="value">{result.mintAddress}</span></div>
-            <div className="result-row"><span className="label">Decimals:</span> <span className="value">{result.decimals}</span></div>
-            <div className="result-row"><span className="label">Initialized:</span> <span className="value">{result.isInitialized ? 'Yes' : 'No'}</span></div>
-            <div className="result-row"><span className="label">Mint Authority:</span> <span className="value">{result.mintAuthority || <span className="safe">None ✅</span>}</span></div>
-            <div className="result-row"><span className="label">Freeze Authority:</span> <span className="value">{result.freezeAuthority || <span className="safe">None ✅</span>}</span></div>
-            <div className="result-row"><span className="label">Mint Authority Safe:</span> <span className={`value ${result.mintAuthoritySafe ? 'safe' : 'risk'}`}>{result.mintAuthoritySafe ? 'Safe' : 'Risk'}</span></div>
-            <div className="result-row"><span className="label">Freeze Authority Safe:</span> <span className={`value ${result.freezeAuthoritySafe ? 'safe' : 'risk'}`}>{result.freezeAuthoritySafe ? 'Safe' : 'Risk'}</span></div>
-            <div className="result-row"><span className="label">Security Summary:</span> <span className="value summary">{result.securitySummary}</span></div>
-          </div>
-        )}
+    <div>
+      <div className="mb-4">
+        <h1 className="text-lg font-bold text-ink">🛡️ Token Security Check</h1>
+        <p className="text-xs text-muted">Check a Solana SPL token mint's authorities and status.</p>
       </div>
+
+      <form onSubmit={handleSubmit} className="flex gap-2">
+        <input
+          className="flex-1 rounded-lg border border-border bg-bg-soft px-3 py-2.5 text-sm text-ink outline-none focus:border-accent"
+          type="text"
+          placeholder="Enter token mint address…"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          disabled={loading}
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-bg transition hover:brightness-110 disabled:opacity-50"
+        >
+          {loading ? 'Checking…' : 'Check'}
+        </button>
+      </form>
+
+      {error && (
+        <div className="mt-3 rounded-lg border border-down/40 bg-down/10 px-3 py-2 text-sm text-down">{error}</div>
+      )}
+
+      {result && (
+        <div className="mt-4 rounded-xl border border-border bg-bg-card p-4">
+          <Row label="Mint Address">{result.mintAddress}</Row>
+          <Row label="Decimals">{result.decimals}</Row>
+          <Row label="Initialized">{result.isInitialized ? 'Yes' : 'No'}</Row>
+          <Row label="Mint Authority">
+            {result.mintAuthority || <span className="text-up">None ✅</span>}
+          </Row>
+          <Row label="Freeze Authority">
+            {result.freezeAuthority || <span className="text-up">None ✅</span>}
+          </Row>
+          <Row label="Mint Authority">{badge(result.mintAuthoritySafe)}</Row>
+          <Row label="Freeze Authority">{badge(result.freezeAuthoritySafe)}</Row>
+          <Row label="Summary">{result.securitySummary}</Row>
+        </div>
+      )}
     </div>
   );
-};
-
-export default TokenSecurity; 
+}

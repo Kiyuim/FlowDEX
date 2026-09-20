@@ -197,7 +197,6 @@ const PoolCreation = () => {
 
       // Check for transaction hash in the API response structure
       const txHash = result.data?.txHash;
-      const poolAddress = result.data?.poolAddress;
       if (txHash) {
         console.log('🎯 Received transaction from API, now signing and sending...');
         console.log('Transaction hash length:', txHash.length);
@@ -354,26 +353,6 @@ const PoolCreation = () => {
           console.log('✅ Transaction confirmed:', confirmation);
           
           setSuccess(`🎉 Pool created successfully! Transaction: ${txSignature}`);
-
-          // Best-effort Portfolio attribution — never block success on this.
-          if (poolAddress) {
-            fetch(`${API_URL}/market/record_user_asset`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chain_id: 100000,
-                wallet_address: publicKey.toString(),
-                asset_type: 'pool',
-                asset_name: `${formData.tokenMint0.slice(0, 4)}/${formData.tokenMint1.slice(0, 4)}`,
-                asset_symbol: 'CLMM',
-                asset_address: poolAddress,
-                token0_address: formData.tokenMint0,
-                token1_address: formData.tokenMint1,
-                pool_type: 'CLMM',
-                fee_tier: parseInt(formData.feeTier),
-              }),
-            }).catch(err => console.warn('⚠️ Failed to record pool in Portfolio:', err));
-          }
         } catch (signError) {
           console.error('❌ Failed to sign/send transaction:', signError);
           setError(`Failed to sign/send transaction: ${signError.message}`);
@@ -530,7 +509,12 @@ const PoolCreation = () => {
             </div>
           )}
 
-        {debugInfo && console.log('Transaction Debug Info:', debugInfo)}
+        {debugInfo && (
+          <div className="debug-info">
+            <h4>Transaction Debug Info:</h4>
+            <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+            </div>
+          )}
 
             <button
           className="create-pool-button" 
