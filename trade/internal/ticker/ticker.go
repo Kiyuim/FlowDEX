@@ -56,7 +56,7 @@ const (
 	// created; finality lands ~13s after confirmation, and a not-yet-final tx
 	// just retries next tick. Was 2 minutes — users saw the follow-up sell
 	// appear well over a minute after the buy.
-	rpcFallbackAfter = 10 * time.Second
+	rpcFallbackAfter = 2 * time.Second
 	// getTransaction calls per tick; keeps worst-case RPC load ~1.5 req/s
 	// (devnet public RPC 429s well below its nominal limits).
 	rpcChecksPerTick = 3
@@ -213,7 +213,9 @@ func (t *TradeTicker) confirmOrderViaRPC(ctx context.Context, order *trademodel.
 	maxVer := uint64(0)
 	res, err := tm.Client.GetTransaction(ctx, sig, &ag_rpc.GetTransactionOpts{
 		Encoding:                       aSDK.EncodingBase64,
-		Commitment:                     ag_rpc.CommitmentFinalized,
+		// The client reported this tx after confirmTransaction('confirmed'),
+		// so it is visible at confirmed right away; finalized would add ~13s.
+		Commitment:                     ag_rpc.CommitmentConfirmed,
 		MaxSupportedTransactionVersion: &maxVer,
 	})
 	if errors.Is(err, ag_rpc.ErrNotFound) {
