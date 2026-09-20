@@ -137,6 +137,25 @@ function applyCandleUpdates(candlestickSeries, oldData, newData) {
 }
 
 
+// Open each candle at the previous candle's close. A candle holding a single
+// trade otherwise has open=high=low=close (a 1px doji) even when the price
+// jumped from the previous candle; stitching gives it a body from the old
+// price to the new one — how pump.fun/GMGN render sparse bonding-curve trades.
+function stitchOpens(candles) {
+  if (!candles || candles.length < 2) return candles || [];
+  const out = candles.map((c) => ({ ...c }));
+  for (let i = 1; i < out.length; i++) {
+    const prevClose = out[i - 1].close;
+    if (!(prevClose > 0)) continue;
+    const c = out[i];
+    if (!c.volume) { c.open = c.high = c.low = c.close = prevClose; continue; }
+    c.open = prevClose;
+    if (c.high < c.open) c.high = c.open;
+    if (c.low > c.open) c.low = c.open;
+  }
+  return out;
+}
+
 // Provisional ticks: on-chain swap events reach the page ~1s after the trade
 // (logsSubscribe), while the indexed candle takes several seconds. Apply
 // ticks newer than what the index already covers (indexedUntil) onto a COPY
@@ -273,7 +292,7 @@ const TradingViewChart = ({ token, liveTrades = [], indexedUntil = 0, visible = 
     liveTradesRef.current = liveTrades || [];
     indexedUntilRef.current = indexedUntil || 0;
     if (!candlestickSeriesRef.current || !candleDataRef.current.length) return;
-    const displayed = applyTicks(candleDataRef.current, liveTradesRef.current, INTERVAL_SECONDS[interval] || 3600, indexedUntilRef.current);
+    const displayed = stitchOpens(applyTicks(candleDataRef.current, liveTradesRef.current, INTERVAL_SECONDS[interval] || 3600, indexedUntilRef.current));
     applyCandleUpdates(candlestickSeriesRef.current, displayedRef.current, displayed);
     applyVolume(volumeSeriesRef.current, displayed);
     displayedRef.current = displayed;
@@ -661,7 +680,7 @@ const TradingViewChart = ({ token, liveTrades = [], indexedUntil = 0, visible = 
                 const nextCandles = upsertCandle(candleDataRef.current, chartData);
                 const filled = fillCandleGaps(nextCandles, intervalSeconds);
                 candleDataRef.current = filled;
-                const displayed = applyTicks(filled, liveTradesRef.current, intervalSeconds, indexedUntilRef.current);
+                const displayed = stitchOpens(applyTicks(filled, liveTradesRef.current, intervalSeconds, indexedUntilRef.current));
                 applyCandleUpdates(candlestickSeriesRef.current, displayedRef.current, displayed);
                 displayedRef.current = displayed;
                 applyVolume(volumeSeriesRef.current, displayed);
@@ -834,7 +853,7 @@ const TradingViewChart = ({ token, liveTrades = [], indexedUntil = 0, visible = 
       console.log('Transformed chart data:', chartData);
 
       const filledChartData = fillCandleGaps(chartData, INTERVAL_SECONDS[selectedInterval] || 3600);
-      const mergedChartData = applyTicks(filledChartData, liveTradesRef.current, INTERVAL_SECONDS[selectedInterval] || 3600, indexedUntilRef.current);
+      const mergedChartData = stitchOpens(applyTicks(filledChartData, liveTradesRef.current, INTERVAL_SECONDS[selectedInterval] || 3600, indexedUntilRef.current));
 
       if (mergedChartData.length > 0) {
         if (!background || !displayedRef.current.length) {
