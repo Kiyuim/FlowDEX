@@ -146,9 +146,9 @@ export async function submitMarketOrder({
 /** Fetch the connected wallet's balance (UI amount) of a given mint. */
 export async function getTokenBalance(connection, owner, mint) {
   try {
-    const resp = await connection.getParsedTokenAccountsByOwner(new PublicKey(owner), {
+    const resp = await withRpcRetry(() => connection.getParsedTokenAccountsByOwner(new PublicKey(owner), {
       mint: new PublicKey(mint),
-    });
+    }));
     let ui = 0;
     for (const { account } of resp.value) {
       ui += account.data.parsed.info.tokenAmount.uiAmount || 0;

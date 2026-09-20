@@ -126,12 +126,9 @@ func (w *ProgramWatcher) poll(program string) {
 		if sg.Err != nil {
 			continue
 		}
-		// Only transactions from around startup onward: older ones belong to
-		// the scanner/backfill, and re-checking the whole window every tick
-		// would just burn RPC.
-		if sg.BlockTime != nil && time.Unix(*sg.BlockTime, 0).Before(w.started.Add(-2*time.Minute)) {
-			continue
-		}
+		// No age cutoff: the last N signatures per program are cheap to
+		// re-check (seen-set + DB dedupe), and a create that landed just
+		// before a restart must still be picked up.
 		if !w.markSeen(sg.Signature) {
 			continue
 		}
