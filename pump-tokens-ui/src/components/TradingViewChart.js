@@ -136,6 +136,39 @@ function applyCandleUpdates(candlestickSeries, oldData, newData) {
   }
 }
 
+
+// Provisional ticks: on-chain swap events reach the page ~1s after the trade
+// (logsSubscribe), while the indexed candle takes several seconds. Apply
+// ticks newer than what the index already covers (indexedUntil) onto a COPY
+// of the authoritative candles so the forming candle moves at once; the
+// backend data overwrites it on the next poll/push, so nothing accumulates.
+function applyTicks(base, ticks, intervalSeconds, indexedUntil) {
+  if (!ticks?.length || !base?.length) return base;
+  const out = base.map((c) => ({ ...c }));
+  const cutoff = Date.now() / 1000 - 180;
+  const sorted = ticks.slice().sort((a, b) => Number(a.time) - Number(b.time));
+  for (const t of sorted) {
+    const time = Number(t.time);
+    const price = Number(t.priceUsd);
+    const vol = Number(t.tokenAmount) || 0;
+    if (!(time > cutoff) || !(price > 0) || time <= (indexedUntil || 0)) continue;
+    const bucket = Math.floor(time / intervalSeconds) * intervalSeconds;
+    let idx = out.findIndex((c) => c.time === bucket);
+    if (idx < 0) {
+      const prev = out[out.length - 1];
+      if (bucket < prev.time) continue;
+      out.push({ time: bucket, open: prev.close, high: price, low: price, close: price, volume: 0 });
+      idx = out.length - 1;
+    }
+    const c = out[idx];
+    c.high = Math.max(c.high, price);
+    c.low = Math.min(c.low, price);
+    c.close = price;
+    c.volume = (c.volume || 0) + vol;
+  }
+  return out;
+}
+
 function mergeLiveTradeCandles(base, trades, interval) {
   const intervalSeconds = {
     '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400,
@@ -195,7 +228,7 @@ function mergeLiveTradeCandles(base, trades, interval) {
   return fillCandleGaps(sortedMerged, intervalSeconds);
 }
 
-const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = false, refreshKey = 0, onCandleStats }) => {
+const TradingViewChart = ({ token, liveTrades = [], indexedUntil = 0, visible = true, mockMode = false, refreshKey = 0, onCandleStats }) => {
   const chartContainerRef = useRef();
   const chartRef = useRef();
   const candlestickSeriesRef = useRef();
@@ -210,6 +243,9 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
   const candleDataRef = useRef([]); // full series, kept in time order, for prev-close lookup
   const [clickInfo, setClickInfo] = useState(null); // { x, y, candle, prevClose }
   const liveTradesRef = useRef(liveTrades);
+  const indexedUntilRef = useRef(indexedUntil);
+  const displayedRef = useRef([]);
+  const INTERVAL_SECONDS = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 };
 
   const notifyCandleStats = (candles) => {
     if (!candles || candles.length === 0 || !onCandleStats) return;
@@ -235,13 +271,14 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
     // left the fetch path with an empty ref forever, so Recent trades updated
     // while the chart remained stuck at the last indexed candle.
     liveTradesRef.current = liveTrades || [];
-    if (!candlestickSeriesRef.current || !liveTrades?.length) return;
-    const merged = mergeLiveTradeCandles(candleDataRef.current, liveTrades, interval);
-    if (!merged.length) return;
-    applyCandleUpdates(candlestickSeriesRef.current, candleDataRef.current, merged);
-    candleDataRef.current = merged;
-    notifyCandleStats(merged);
-  }, [liveTrades, interval]);
+    indexedUntilRef.current = indexedUntil || 0;
+    if (!candlestickSeriesRef.current || !candleDataRef.current.length) return;
+    const displayed = applyTicks(candleDataRef.current, liveTradesRef.current, INTERVAL_SECONDS[interval] || 3600, indexedUntilRef.current);
+    applyCandleUpdates(candlestickSeriesRef.current, displayedRef.current, displayed);
+    applyVolume(volumeSeriesRef.current, displayed);
+    displayedRef.current = displayed;
+    notifyCandleStats(displayed);
+  }, [liveTrades, indexedUntil, interval]);
 
   // Initialize chart
   useEffect(() => {
@@ -623,10 +660,12 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
                 }[interval] || 3600;
                 const nextCandles = upsertCandle(candleDataRef.current, chartData);
                 const filled = fillCandleGaps(nextCandles, intervalSeconds);
-                applyCandleUpdates(candlestickSeriesRef.current, candleDataRef.current, filled);
                 candleDataRef.current = filled;
-                applyVolume(volumeSeriesRef.current, filled);
-                notifyCandleStats(filled);
+                const displayed = applyTicks(filled, liveTradesRef.current, intervalSeconds, indexedUntilRef.current);
+                applyCandleUpdates(candlestickSeriesRef.current, displayedRef.current, displayed);
+                displayedRef.current = displayed;
+                applyVolume(volumeSeriesRef.current, displayed);
+                notifyCandleStats(displayed);
                 setError('');
                 console.log('Chart updated successfully with timestamp:', chartData.time);
               } catch (updateError) {
@@ -794,16 +833,17 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
 
       console.log('Transformed chart data:', chartData);
 
-      const mergedChartData = mergeLiveTradeCandles(chartData, liveTradesRef.current, selectedInterval);
+      const filledChartData = fillCandleGaps(chartData, INTERVAL_SECONDS[selectedInterval] || 3600);
+      const mergedChartData = applyTicks(filledChartData, liveTradesRef.current, INTERVAL_SECONDS[selectedInterval] || 3600, indexedUntilRef.current);
 
       if (mergedChartData.length > 0) {
-        if (!background || !candleDataRef.current.length) {
+        if (!background || !displayedRef.current.length) {
           candlestickSeriesRef.current.setData(mergedChartData);
-          candleDataRef.current = mergedChartData;
         } else {
-          applyCandleUpdates(candlestickSeriesRef.current, candleDataRef.current, mergedChartData);
-          candleDataRef.current = mergedChartData;
+          applyCandleUpdates(candlestickSeriesRef.current, displayedRef.current, mergedChartData);
         }
+        candleDataRef.current = filledChartData;
+        displayedRef.current = mergedChartData;
         applyVolume(volumeSeriesRef.current, mergedChartData);
         setError('');
         notifyCandleStats(mergedChartData);
@@ -821,6 +861,7 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
         candlestickSeriesRef.current.setData([]);
         volumeSeriesRef.current?.setData([]);
         candleDataRef.current = [];
+        displayedRef.current = [];
         setError('No chart data available for this token');
       }
     } catch (error) {

@@ -114,7 +114,7 @@ export default function TokenSource() {
 
   useEffect(() => {
     fetchAll();
-    const id = setInterval(fetchAll, 15000);
+    const id = setInterval(fetchAll, 5000);
     return () => clearInterval(id);
   }, [fetchAll]);
 

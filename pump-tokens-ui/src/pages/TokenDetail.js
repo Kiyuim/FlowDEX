@@ -119,6 +119,9 @@ export default function TokenDetail() {
     || (token?.pairAddress && token.pairAddress !== mint ? token.pairAddress : null);
   const { trades: indexedTrades, stats: indexedStats, status: indexedStatus, reload: reloadIndexed } = useIndexedTrades(indexedPair);
   const useIndex = indexedStatus === 'ok';
+  // Newest trade time the index has recorded — on-chain events newer than
+  // this are applied to the chart as provisional ticks until indexed.
+  const indexedUntil = useMemo(() => indexedTrades.reduce((m, t) => Math.max(m, Number(t.time) || 0), 0), [indexedTrades]);
   const trades = useIndex ? indexedTrades : chainTrades;
   const tradesStatus = useIndex ? 'ok' : (indexedStatus === 'loading' && chainTradesStatus !== 'ok' ? 'loading' : chainTradesStatus);
 
@@ -275,6 +278,8 @@ export default function TokenDetail() {
           <div className="rounded-xl border border-border bg-bg-card p-2 shadow-card">
             <TradingViewChart
               token={chartToken}
+              liveTrades={chainTrades}
+              indexedUntil={indexedUntil}
               refreshKey={chartRefresh}
               onCandleStats={handleCandleStats}
               visible
