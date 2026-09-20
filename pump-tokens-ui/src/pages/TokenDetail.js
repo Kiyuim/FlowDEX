@@ -100,18 +100,28 @@ export default function TokenDetail() {
   const poolRes = reserves || curveState;
   // Only mount the (heavier) candle chart once there's real on-chain trade
   // activity to show — otherwise it's an empty canvas with nothing in it.
-  const hasTrades = !!token && trades.length > 0;
 
   useEffect(() => {
     let alive = true;
-    if (!token || token.tokenAddress !== mint) {
-      setLoading(true);
-      fetchTokenByMint(mint).then((t) => {
-        if (!alive) return;
-        setToken(t || { tokenAddress: mint, tokenSymbol: 'TOKEN', pairAddress: mint });
-        setLoading(false);
+    // Always attempt the indexed lookup — it's the only source of a real
+    // pairAddress (a token passed via router state, e.g. from Portfolio's
+    // "Created by you" list, only carries name/symbol/icon, not a pair).
+    // Don't block the UI with a spinner if we already have something to
+    // show from nav state though.
+    if (!token || token.tokenAddress !== mint) setLoading(true);
+    fetchTokenByMint(mint).then((t) => {
+      if (!alive) return;
+      setToken((prev) => {
+        if (t) return t; // indexed data is always the most complete
+        if (prev && prev.tokenAddress === mint) {
+          // Keep whatever we were passed, but make sure pairAddress is set —
+          // without it the kline fetch and chart both silently no-op.
+          return { ...prev, pairAddress: prev.pairAddress || mint };
+        }
+        return { tokenAddress: mint, tokenSymbol: 'TOKEN', pairAddress: mint };
       });
-    }
+      setLoading(false);
+    });
     return () => {
       alive = false;
     };
@@ -168,8 +178,13 @@ export default function TokenDetail() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
           <div className="rounded-xl border border-border bg-bg-card p-2 shadow-card">
-            <div className={hasTrades ? '' : 'h-[380px] md:h-[460px]'}>
-              {hasTrades ? (
+            <div className={token ? '' : 'h-[380px] md:h-[460px]'}>
+              {token ? (
+                // TradingViewChart fetches candles from our own backend
+                // (/v1/market/get_candlestick), independent of on-chain
+                // trades — an old seeded token can have real backend kline
+                // history with zero on-chain trades (or vice versa for a
+                // brand-new one). It shows its own empty state either way.
                 <TradingViewChart token={token} visible />
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">

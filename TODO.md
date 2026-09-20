@@ -1,5 +1,35 @@
 # TODO
 
+## Done this round, latest (2026-09-20, UX after the buy/sell fix)
+
+- **Sell 25/50/75/100% presets didn't show the amount**: they tracked an
+  internal percentage but left the input blank — fixed to populate the
+  input with the actual computed number at click time.
+- **Page didn't refresh after a trade**: reserves/trades/price all poll on
+  their own 15-20s interval independently, so nothing visibly changed
+  right after a buy/sell until the next scheduled poll happened to land.
+  Added an explicit reload of all three ~2.5s after a successful market
+  order.
+- **Standard SPL tokens have no price by design** — clarified for the user
+  (not a bug): only PumpMeteora/PumpMeteora V2 launches get a bonding curve
+  and are directly buyable; a Standard SPL mint needs a CLMM pool + added
+  liquidity before it's tradeable at all.
+- **Pool creation "Internal error" investigated with a direct on-chain
+  simulation** (pulled the exact failing tx, ran `simulateTransaction`
+  against Helius): the pool address didn't already exist (not a
+  duplicate-creation collision), and simulating with a realistic current
+  timestamp succeeds cleanly (`err: null`). The flow itself is correct;
+  a stale/expired blockhash between building and sending is the most
+  likely explanation for an intermittent failure. Not fully resolved —
+  needs the exact failing transaction ID next time to simulate directly.
+- **Confirmed**: your PumpMeteora token from earlier this session
+  (`676cSvo3SsJm1nsgMjTKURa4ofYWL3Jc49MWvVb5wVZ1`) is still not indexed at
+  any status — its creation block was one of the ones the consumer still
+  missed. Buy/sell for it works anyway (the on-chain fallback doesn't
+  depend on indexing), but it won't appear on the Discovery homepage and
+  its kline won't aggregate until/unless indexing catches it — this remains
+  probabilistic, not guaranteed, even with the improved concurrency.
+
 ## Buy/sell now confirmed working for un-indexed tokens (2026-09-20)
 
 The critical-path item — root-caused and fixed end-to-end, verified via
