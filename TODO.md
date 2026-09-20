@@ -1,5 +1,20 @@
 # TODO
 
+## Done this round, yet later (2026-09-20) — a hard RPC blocker
+
+Pasted browser console logs surfaced the real, structural cause behind a lot
+of this round's flakiness: `useBondingCurveTrades` called
+`connection.getParsedTransactions(sigArray)` (plural) to fetch a chunk of
+transactions at once. `@solana/web3.js` sends that as a single **batched**
+JSON-RPC request, and Helius's plan on this project flatly rejects batch
+requests — `403: Batch requests are only available for paid plans` — every
+single time, not just under load. This wasn't a rate-limit that retries
+would eventually get past; recent trades for ANY token (real or seeded)
+could never load through this path. Fixed by fetching one transaction at a
+time (`getParsedTransaction`, singular) instead, capped at 15 new
+signatures per poll with a small delay between each to stay under the
+separate (retriable) 429 rate limit.
+
 ## Done this round, even later (2026-09-20)
 
 - **Portfolio "Created by you" links showed the token name as "TOKEN"**:

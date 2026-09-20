@@ -3,19 +3,21 @@ import { useConnection } from '@solana/wallet-adapter-react';
 import { deriveBondingCurve, parsePumpEventLog } from '../lib/pump';
 import { METEORA_PROGRAMS, deriveMeteoraBondingCurve, parseMeteoraSwapEventLog } from '../lib/meteora';
 
-const CHUNK = 20; // public devnet RPC counts each batch item; keep calls small
-const CHUNK_DELAY_MS = 400;
+const REQ_DELAY_MS = 250;
 const RATE_LIMIT_COOLDOWN_MS = 60000;
+const MAX_NEW_PER_POLL = 15; // cap RPC calls per poll; the rest catch up next poll
 
 // Reconstructs recent trades for a bonding-curve token directly from the chain:
 // fetch the curve's recent signatures, parse the pump vdt/007m event from each.
 // Returns trades newest-first. Shared by the chart and the trades feed so they
 // don't double-fetch.
 //
-// The public devnet RPC rate-limits getParsedTransactions aggressively, so:
-// already-parsed signatures are cached and skipped on later polls, new ones are
-// fetched in small chunks, and a 429 puts the hook in a cooldown instead of
-// hammering the endpoint every poll.
+// Fetches transactions ONE AT A TIME (getParsedTransaction, not the plural
+// getParsedTransactions) — the plural form sends a single batched JSON-RPC
+// request, which Helius's non-paid plans reject outright with a 403
+// ("Batch requests are only available for paid plans"), not just rate-limit.
+// Already-parsed signatures are cached and skipped on later polls, and a 429
+// puts the hook in a cooldown instead of hammering the endpoint every poll.
 export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000 } = {}) {
   const { connection } = useConnection();
   const [trades, setTrades] = useState([]);
@@ -59,15 +61,11 @@ export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000
         cache.bySig = new Map();
       }
 
-      const newSigs = sigs.filter((s) => !cache.bySig.has(s.signature));
-      for (let i = 0; i < newSigs.length; i += CHUNK) {
-        const chunk = newSigs.slice(i, i + CHUNK);
-        const txs = await connection.getParsedTransactions(
-          chunk.map((s) => s.signature),
-          { maxSupportedTransactionVersion: 0 }
-        );
-        txs.forEach((tx, j) => {
-          const sig = chunk[j].signature;
+      const newSigs = sigs.filter((s) => !cache.bySig.has(s.signature)).slice(0, MAX_NEW_PER_POLL);
+      for (let i = 0; i < newSigs.length; i++) {
+        const sig = newSigs[i].signature;
+        try {
+          const tx = await connection.getParsedTransaction(sig, { maxSupportedTransactionVersion: 0 });
           const events = [];
           const logs = tx?.meta?.logMessages;
           if (logs) {
@@ -77,9 +75,16 @@ export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000
             }
           }
           cache.bySig.set(sig, events);
-        });
-        if (i + CHUNK < newSigs.length) {
-          await new Promise((r) => setTimeout(r, CHUNK_DELAY_MS));
+        } catch (txErr) {
+          const msg = String(txErr?.message || txErr).toLowerCase();
+          if (msg.includes('too many requests') || msg.includes('429')) {
+            cache.backoffUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+            break; // stop this poll's fetching; resume next poll after cooldown
+          }
+          // leave this signature unfetched — retried on a later poll
+        }
+        if (i + 1 < newSigs.length) {
+          await new Promise((r) => setTimeout(r, REQ_DELAY_MS));
         }
       }
 
