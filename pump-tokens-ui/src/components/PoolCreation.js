@@ -4,6 +4,7 @@ import './PoolCreation.css';
 import { Transaction, VersionedTransaction, Message } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 import * as aSDK from '@solana/spl-token-registry';
+import { recordUserAsset } from '../lib/trade';
 
 const PoolCreation = () => {
   const { publicKey, connected, sendTransaction } = useWallet();
@@ -197,6 +198,7 @@ const PoolCreation = () => {
 
       // Check for transaction hash in the API response structure
       const txHash = result.data?.txHash;
+      const poolAddress = result.data?.poolAddress;
       if (txHash) {
         console.log('🎯 Received transaction from API, now signing and sending...');
         console.log('Transaction hash length:', txHash.length);
@@ -345,6 +347,18 @@ const PoolCreation = () => {
           console.log('✅ Transaction confirmed:', confirmation);
           
           setSuccess(`🎉 Pool created successfully! Transaction: ${txSignature}`);
+          if (poolAddress) {
+            recordUserAsset({
+              wallet_address: publicKey.toString(),
+              asset_type: 'pool',
+              asset_name: `${formData.tokenMint0.slice(0, 4)}/${formData.tokenMint1.slice(0, 4)} CLMM Pool`,
+              asset_address: poolAddress,
+              token0_address: formData.tokenMint0,
+              token1_address: formData.tokenMint1,
+              pool_type: 'RaydiumCLMM',
+              fee_tier: Number(formData.feeTier),
+            }).catch((e) => console.warn('record_user_asset failed (non-fatal):', e));
+          }
         } catch (signError) {
           console.error('❌ Failed to sign/send transaction:', signError);
           setError(`Failed to sign/send transaction: ${signError.message}`);

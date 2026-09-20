@@ -130,6 +130,9 @@ whitelist:
     - /v1/market/user_pools
     - /v1/market/record_user_asset
     - /v1/trade/create_limit_order
+    - /v1/trade/create_trailing_stop
+    - /v1/trade/cancel_order
+    - /v1/trade/query_current_orders
     - /v1/trade/create_market_order
     - /v1/trade/create_pool
     - /v1/trade/add_liquidity_v1

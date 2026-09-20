@@ -146,6 +146,16 @@ async function post(path, body) {
 }
 
 /**
+ * Records a newly-created token or pool against the connected wallet so it
+ * shows up on the Portfolio page. Best-effort: callers should not fail the
+ * whole creation flow if this call fails (the on-chain asset already exists
+ * either way — only its Portfolio listing would be missing).
+ */
+export async function recordUserAsset(payload) {
+  return post('/v1/market/record_user_asset', { chain_id: 100000, ...payload });
+}
+
+/**
  * Place a limit order. The backend stores it (MySQL + Redis trigger list) and
  * executes it as a market order when an on-chain trade brings the price across
  * the limit. Buy: amount = SOL to spend. Sell: amount = tokens to sell.

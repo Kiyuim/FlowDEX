@@ -17,6 +17,7 @@ import {
   TOKEN_2022_PROGRAM_ID
 } from '@solana/spl-token';
 import { buildCreateBondingCurveIx, METEORA_PROGRAMS, METEORA_LABELS } from '../lib/meteora';
+import { recordUserAsset } from '../lib/trade';
 import './TokenCreation.css';
 
 // Standard sizes for SPL Token accounts
@@ -112,6 +113,15 @@ const TokenCreation = () => {
         setSuccess(`${METEORA_LABELS[formData.launchTarget]} token created — it's now a live bonding curve. Trade it from the Sources page.`);
         setTxSignature(txid);
         setTokenMint(curveMint.publicKey.toString());
+        recordUserAsset({
+          wallet_address: publicKey.toString(),
+          asset_type: 'token',
+          asset_name: formData.name.trim(),
+          asset_symbol: formData.symbol.trim(),
+          asset_address: curveMint.publicKey.toString(),
+          decimals: 6,
+          total_supply: '0',
+        }).catch((e) => console.warn('record_user_asset failed (non-fatal):', e));
         return;
       }
 
@@ -238,6 +248,15 @@ const TokenCreation = () => {
         setSuccess('Token created successfully!');
         setTxSignature(txid);
         setTokenMint(mintKeypair.publicKey.toString());
+        recordUserAsset({
+          wallet_address: publicKey.toString(),
+          asset_type: 'token',
+          asset_name: formData.name.trim(),
+          asset_symbol: formData.symbol.trim(),
+          asset_address: mintKeypair.publicKey.toString(),
+          decimals: formData.decimals,
+          total_supply: String(formData.supply),
+        }).catch((e) => console.warn('record_user_asset failed (non-fatal):', e));
       } catch (err) {
         console.error('❌ Error signing/sending transaction:', err);
         throw new Error(`Failed to sign or send transaction: ${err.message}`);
