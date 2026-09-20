@@ -64,6 +64,9 @@ Upstreams: # upstreams
         Path: /v1/trade/create_market_order
         RpcPath: trade.Trade/CreateMarketOrder
       - Method: post
+        Path: /v1/trade/confirm_market_order
+        RpcPath: trade.Trade/ConfirmMarketOrder
+      - Method: post
         Path: /v1/trade/create_limit_order
         RpcPath: trade.Trade/CreateLimitOrder
       - Method: post
@@ -134,6 +137,7 @@ whitelist:
     - /v1/trade/cancel_order
     - /v1/trade/query_current_orders
     - /v1/trade/create_market_order
+    - /v1/trade/confirm_market_order
     - /v1/trade/create_pool
     - /v1/trade/add_liquidity_v1
     - /trade/add_liquidity_v1

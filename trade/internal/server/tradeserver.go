@@ -38,6 +38,11 @@ func (s *TradeServer) CreateMarketOrder(ctx context.Context, in *trade.CreateMar
 	return l.CreateMarketOrder(in)
 }
 
+func (s *TradeServer) ConfirmMarketOrder(ctx context.Context, in *trade.ConfirmMarketOrderRequest) (*trade.ConfirmMarketOrderResponse, error) {
+	l := logic.NewConfirmMarketOrderLogic(ctx, s.svcCtx)
+	return l.ConfirmMarketOrder(in)
+}
+
 func (s *TradeServer) CreatePool(ctx context.Context, in *trade.CreatePoolRequest) (*trade.CreatePoolResponse, error) {
 	l := logic.NewCreatePoolLogic(ctx, s.svcCtx)
 	return l.CreatePool(in)

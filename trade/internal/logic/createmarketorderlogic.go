@@ -231,7 +231,11 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.CreateMarketOrderRe
 		}
 
 		l.Infof("CreateMarketTx success, txHash length: %d", len(txHash))
-		return &trade.CreateMarketOrderResponse{TxHash: txHash}, nil
+		// order_id lets the client report back what happened to an unsigned tx
+		// (it signs and sends it itself) via ConfirmMarketOrder — without that,
+		// the order never leaves Proc and any attached follow-up leg never
+		// gets created (see ConfirmMarketOrder's doc comment).
+		return &trade.CreateMarketOrderResponse{TxHash: txHash, OrderId: order.Id}, nil
 	}
 
 	l.Infof("Taking asynchronous path - returning empty txHash immediately")

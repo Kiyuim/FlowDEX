@@ -63,6 +63,21 @@ message CreateMarketOrderRequest {
 
 message CreateMarketOrderResponse {
   string tx_hash = 1;
+  // Set only when tx_hash is an unsigned transaction (the client must sign
+  // and send it) — the client reports the final signature back via
+  // ConfirmMarketOrder once it lands, so this order can be tracked to
+  // completion and any auto-attached follow-up leg (double-out, trailing
+  // stop) still gets created.
+  int64 order_id = 2;
+}
+
+message ConfirmMarketOrderRequest {
+  int64 order_id = 1;
+  string tx_hash = 2; // set on success — order moves to OnChain, ticker takes over
+  string error = 3;   // set on failure (user rejected signing, send/confirm failed) — order moves straight to Failed
+}
+
+message ConfirmMarketOrderResponse {
 }
 
 message CreatePoolRequest {
@@ -352,6 +367,7 @@ service Trade {
   rpc CreateLimitOrder(CreateLimitOrderRequest) returns(CreateLimitOrderResponse);
   rpc CancelOrder(CancelOrderRequest) returns(CancelOrderResponse);
   rpc CreateMarketOrder(CreateMarketOrderRequest) returns(CreateMarketOrderResponse);
+  rpc ConfirmMarketOrder(ConfirmMarketOrderRequest) returns(ConfirmMarketOrderResponse);
   rpc CreatePool(CreatePoolRequest) returns(CreatePoolResponse);
   rpc QueryCurrentOrders(QueryCurrentOrdersRequest) returns(QueryCurrentOrdersResponse);
   rpc QueryTradeHistory(QueryTradeHistoryRequest) returns(QueryTradeHistoryResponse);

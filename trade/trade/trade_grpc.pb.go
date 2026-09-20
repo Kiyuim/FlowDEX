@@ -22,6 +22,7 @@ const (
 	Trade_CreateLimitOrder_FullMethodName   = "/trade.Trade/CreateLimitOrder"
 	Trade_CancelOrder_FullMethodName        = "/trade.Trade/CancelOrder"
 	Trade_CreateMarketOrder_FullMethodName  = "/trade.Trade/CreateMarketOrder"
+	Trade_ConfirmMarketOrder_FullMethodName = "/trade.Trade/ConfirmMarketOrder"
 	Trade_CreatePool_FullMethodName         = "/trade.Trade/CreatePool"
 	Trade_QueryCurrentOrders_FullMethodName = "/trade.Trade/QueryCurrentOrders"
 	Trade_QueryTradeHistory_FullMethodName  = "/trade.Trade/QueryTradeHistory"
@@ -45,6 +46,7 @@ type TradeClient interface {
 	CreateLimitOrder(ctx context.Context, in *CreateLimitOrderRequest, opts ...grpc.CallOption) (*CreateLimitOrderResponse, error)
 	CancelOrder(ctx context.Context, in *CancelOrderRequest, opts ...grpc.CallOption) (*CancelOrderResponse, error)
 	CreateMarketOrder(ctx context.Context, in *CreateMarketOrderRequest, opts ...grpc.CallOption) (*CreateMarketOrderResponse, error)
+	ConfirmMarketOrder(ctx context.Context, in *ConfirmMarketOrderRequest, opts ...grpc.CallOption) (*ConfirmMarketOrderResponse, error)
 	CreatePool(ctx context.Context, in *CreatePoolRequest, opts ...grpc.CallOption) (*CreatePoolResponse, error)
 	QueryCurrentOrders(ctx context.Context, in *QueryCurrentOrdersRequest, opts ...grpc.CallOption) (*QueryCurrentOrdersResponse, error)
 	QueryTradeHistory(ctx context.Context, in *QueryTradeHistoryRequest, opts ...grpc.CallOption) (*QueryTradeHistoryResponse, error)
@@ -94,6 +96,16 @@ func (c *tradeClient) CreateMarketOrder(ctx context.Context, in *CreateMarketOrd
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateMarketOrderResponse)
 	err := c.cc.Invoke(ctx, Trade_CreateMarketOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradeClient) ConfirmMarketOrder(ctx context.Context, in *ConfirmMarketOrderRequest, opts ...grpc.CallOption) (*ConfirmMarketOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfirmMarketOrderResponse)
+	err := c.cc.Invoke(ctx, Trade_ConfirmMarketOrder_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -247,6 +259,7 @@ type TradeServer interface {
 	CreateLimitOrder(context.Context, *CreateLimitOrderRequest) (*CreateLimitOrderResponse, error)
 	CancelOrder(context.Context, *CancelOrderRequest) (*CancelOrderResponse, error)
 	CreateMarketOrder(context.Context, *CreateMarketOrderRequest) (*CreateMarketOrderResponse, error)
+	ConfirmMarketOrder(context.Context, *ConfirmMarketOrderRequest) (*ConfirmMarketOrderResponse, error)
 	CreatePool(context.Context, *CreatePoolRequest) (*CreatePoolResponse, error)
 	QueryCurrentOrders(context.Context, *QueryCurrentOrdersRequest) (*QueryCurrentOrdersResponse, error)
 	QueryTradeHistory(context.Context, *QueryTradeHistoryRequest) (*QueryTradeHistoryResponse, error)
@@ -280,6 +293,9 @@ func (UnimplementedTradeServer) CancelOrder(context.Context, *CancelOrderRequest
 }
 func (UnimplementedTradeServer) CreateMarketOrder(context.Context, *CreateMarketOrderRequest) (*CreateMarketOrderResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateMarketOrder not implemented")
+}
+func (UnimplementedTradeServer) ConfirmMarketOrder(context.Context, *ConfirmMarketOrderRequest) (*ConfirmMarketOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmMarketOrder not implemented")
 }
 func (UnimplementedTradeServer) CreatePool(context.Context, *CreatePoolRequest) (*CreatePoolResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreatePool not implemented")
@@ -394,6 +410,24 @@ func _Trade_CreateMarketOrder_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TradeServer).CreateMarketOrder(ctx, req.(*CreateMarketOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Trade_ConfirmMarketOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmMarketOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradeServer).ConfirmMarketOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Trade_ConfirmMarketOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradeServer).ConfirmMarketOrder(ctx, req.(*ConfirmMarketOrderRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -668,6 +702,10 @@ var Trade_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateMarketOrder",
 			Handler:    _Trade_CreateMarketOrder_Handler,
+		},
+		{
+			MethodName: "ConfirmMarketOrder",
+			Handler:    _Trade_ConfirmMarketOrder_Handler,
 		},
 		{
 			MethodName: "CreatePool",

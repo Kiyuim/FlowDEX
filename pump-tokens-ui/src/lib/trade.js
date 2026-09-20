@@ -52,46 +52,71 @@ export async function submitMarketOrder({
   }
   const b64 = data.data?.txHash || data.txHash || data.tx_hash;
   if (!b64) throw new Error('No transaction returned by server');
+  const orderId = data.data?.orderId ?? data.orderId ?? data.order_id;
 
   // Every buy — including double-out/trailing-stop-attached ones — is an
   // unsigned tx the user signs here, so the tokens land in their own wallet.
   // Only the auto-created follow-up sell leg (2x sell / drawdown sell) is
   // executed server-side later, once it triggers.
+  //
+  // The backend has no other way to learn what happens next — it just handed
+  // over an unsigned tx — so whichever way this goes (signed+confirmed, or
+  // rejected/failed), report it back via confirm_market_order. Without that
+  // the order sits at "Triggered" (Proc) forever: invisible to the ticker
+  // that would otherwise finalize it and create any attached follow-up leg.
+  const reportOutcome = async (payload) => {
+    if (!orderId) return; // server-signed path never returns one — nothing to report
+    try {
+      await fetch('/v1/trade/confirm_market_order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId, ...payload }),
+      });
+    } catch (e) {
+      console.error('confirm_market_order failed:', e);
+    }
+  };
 
-  // 2) decode (legacy or versioned)
-  const buf = Buffer.from(b64, 'base64');
-  let tx;
-  let versioned = false;
   try {
-    tx = Transaction.from(buf);
-  } catch {
-    tx = VersionedTransaction.deserialize(buf);
-    versioned = true;
-  }
+    // 2) decode (legacy or versioned)
+    const buf = Buffer.from(b64, 'base64');
+    let tx;
+    let versioned = false;
+    try {
+      tx = Transaction.from(buf);
+    } catch {
+      tx = VersionedTransaction.deserialize(buf);
+      versioned = true;
+    }
 
-  // 3) refresh blockhash for legacy txs, sign, submit via the app's devnet RPC
-  const latest = await connection.getLatestBlockhash('finalized');
-  if (!versioned) {
-    tx.recentBlockhash = latest.blockhash;
-    tx.feePayer = publicKey;
-  }
+    // 3) refresh blockhash for legacy txs, sign, submit via the app's devnet RPC
+    const latest = await connection.getLatestBlockhash('finalized');
+    if (!versioned) {
+      tx.recentBlockhash = latest.blockhash;
+      tx.feePayer = publicKey;
+    }
 
-  let signature;
-  if (signTransaction) {
-    const signed = await signTransaction(tx);
-    signature = await connection.sendRawTransaction(signed.serialize(), {
-      skipPreflight: false,
-      maxRetries: 3,
-    });
-  } else {
-    signature = await sendTransaction(tx, connection);
-  }
+    let signature;
+    if (signTransaction) {
+      const signed = await signTransaction(tx);
+      signature = await connection.sendRawTransaction(signed.serialize(), {
+        skipPreflight: false,
+        maxRetries: 3,
+      });
+    } else {
+      signature = await sendTransaction(tx, connection);
+    }
 
-  await connection.confirmTransaction(
-    { signature, blockhash: latest.blockhash, lastValidBlockHeight: latest.lastValidBlockHeight },
-    'confirmed'
-  );
-  return signature;
+    await connection.confirmTransaction(
+      { signature, blockhash: latest.blockhash, lastValidBlockHeight: latest.lastValidBlockHeight },
+      'confirmed'
+    );
+    await reportOutcome({ tx_hash: signature });
+    return signature;
+  } catch (e) {
+    await reportOutcome({ error: String(e?.message || e).slice(0, 500) });
+    throw e;
+  }
 }
 
 /** Fetch the connected wallet's balance (UI amount) of a given mint. */
