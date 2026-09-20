@@ -1,5 +1,28 @@
 # TODO
 
+## Done this round, even later (2026-09-20)
+
+- **Portfolio "Created by you" links showed the token name as "TOKEN"**:
+  the Link to `/token/:mint` passed no `state`, so TokenDetail.js had
+  nothing to show until (if ever) `index_pump` picked the token up. Fixed
+  to pass the real name/symbol/icon straight from the already-fetched
+  `user_tokens` data.
+- **Chart no longer mounts (and its canvas no longer "floats") when a
+  token has zero on-chain trades** — reverted to gating on `hasTrades`
+  (now correctly computed via the source-aware `useBondingCurveTrades`
+  fixed earlier this round) instead of unconditionally mounting it. Shows
+  the plain "🌱 No trades yet" placeholder instead.
+- **Pool creation "Internal error" report**: could not repro without a tx
+  signature or the specific token pair — most likely explanation is a
+  retried/duplicate token pair colliding with a pool that already exists
+  on-chain (Raydium CLMM pool addresses are deterministic PDAs per pair +
+  fee tier), which a wallet's preflight simulation surfaces generically as
+  "Internal error". Told the user to retry with a genuinely fresh pair to
+  isolate whether it's a collision or a new issue.
+- Could not test buy/sell live myself as asked — the generated server
+  wallet has 0 SOL (devnet faucets still rate-limited) and there's no
+  browser/wallet extension available in this environment to drive the UI.
+
 ## Done this round, latest (2026-09-20, confirmed live)
 
 - **Pool creation actually works** — confirmed on-chain, not just in theory:

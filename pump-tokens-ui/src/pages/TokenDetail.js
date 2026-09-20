@@ -90,6 +90,9 @@ export default function TokenDetail() {
   const displayPrice = stats?.price ?? curveState?.priceUsd ?? null;
   // reserves hook is pump.fun-only; fall back to the source-aware curve read.
   const poolRes = reserves || curveState;
+  // Only mount the (heavier) candle chart once there's real on-chain trade
+  // activity to show — otherwise it's an empty canvas with nothing in it.
+  const hasTrades = !!token && trades.length > 0;
 
   useEffect(() => {
     let alive = true;
@@ -157,12 +160,8 @@ export default function TokenDetail() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
           <div className="rounded-xl border border-border bg-bg-card p-2 shadow-card">
-            <div className={token ? '' : 'h-[380px] md:h-[460px]'}>
-              {token ? (
-                // TradingViewChart fetches candles from our own backend
-                // (/v1/market/get_candlestick), independent of on-chain trades —
-                // it renders fine even before (or without) any on-chain fill, and
-                // shows its own empty state if the backend has no candles either.
+            <div className={hasTrades ? '' : 'h-[380px] md:h-[460px]'}>
+              {hasTrades ? (
                 <TradingViewChart token={token} visible />
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">

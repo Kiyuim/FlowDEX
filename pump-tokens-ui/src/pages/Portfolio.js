@@ -132,6 +132,14 @@ export default function Portfolio() {
               <Link
                 key={`t-${t.tokenAddress}`}
                 to={`/token/${t.tokenAddress}`}
+                state={{
+                  token: {
+                    tokenAddress: t.tokenAddress,
+                    tokenName: t.tokenName,
+                    tokenSymbol: t.tokenSymbol,
+                    tokenIcon: t.tokenIcon,
+                  },
+                }}
                 className="flex items-center gap-3 rounded-xl border border-border bg-bg-card p-3 transition hover:border-accent/50 hover:bg-bg-hover"
               >
                 {t.tokenIcon ? (
