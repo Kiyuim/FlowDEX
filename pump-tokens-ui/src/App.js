@@ -452,7 +452,12 @@ const CustomWalletButton = () => {
 
 function App() {
   const [selectedToken, setSelectedToken] = useState(null);
-  const [activeTab, setActiveTab] = useState('tokens');
+  const VALID_TABS = ['tokens', 'chart', 'sources', 'portfolio', 'create-token', 'pool', 'faucet', 'token-security'];
+  const tabFromHash = () => {
+    const h = window.location.hash.replace(/^#/, '');
+    return VALID_TABS.includes(h) ? h : 'tokens';
+  };
+  const [activeTab, setActiveTab] = useState(tabFromHash);
   const [showDebugger, setShowDebugger] = useState(false);
 
   // Initialize wallets with useMemo for proper React optimization
@@ -509,12 +514,30 @@ function App() {
     console.log(`[${new Date().toLocaleTimeString()}] 🎯 Token selected:`, token?.tokenName, 'switching to chart tab');
     setSelectedToken(token);
     setActiveTab('chart');
+    if (window.location.hash.replace(/^#/, '') !== 'chart') {
+      window.location.hash = 'chart';
+    }
   };
 
   const handleTabSwitch = (tab) => {
     console.log(`[${new Date().toLocaleTimeString()}] 🔀 Tab switching from`, activeTab, 'to', tab);
     setActiveTab(tab);
+    if (window.location.hash.replace(/^#/, '') !== tab) {
+      window.location.hash = tab;
+    }
   };
+
+  // Browser back/forward should move between tabs, not just do nothing —
+  // tab switches previously only touched React state, so there was no
+  // history entry for the browser's back/forward buttons to move through.
+  useEffect(() => {
+    const handleHashChange = () => {
+      setActiveTab(tabFromHash());
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Track tab changes
   useEffect(() => {
