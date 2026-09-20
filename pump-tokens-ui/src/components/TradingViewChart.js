@@ -657,7 +657,8 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
             }}
           >
             <div style={{ fontSize: 32 }}>🌱</div>
-            <div>No chart data available for this token</div>
+            <div style={{ fontWeight: 600, color: '#d1d4dc' }}>No trades yet</div>
+            <div>Be the first to buy this token — the candle chart starts after the first trade.</div>
           </div>
         )}
 

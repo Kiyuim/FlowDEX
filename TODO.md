@@ -1,5 +1,35 @@
 # TODO
 
+## Done this round, latest (2026-09-20, confirmed live)
+
+- **Pool creation actually works** — confirmed on-chain, not just in theory:
+  pulled a real transaction signature from a live create-pool attempt and
+  checked it via Helius (`getTransaction`) — `err: null`, `Instruction:
+  CreatePool` executed successfully. The `sendTransaction` fix from earlier
+  this round resolved it; the "signature has invalid length" reports after
+  that were from a stale bundle or an intermittent retry, not a standing bug.
+- **Root-caused why new tokens don't show up anywhere**: checked production
+  logs for `processBlock` slot numbers and found gaps of 800-1000+ slots
+  between processed blocks (devnet produces a new slot every ~0.4s) —
+  `consumer.yaml` had `Concurrency: 1`, so a single worker fetching+decoding
+  blocks sequentially couldn't remotely keep pace, and almost every block —
+  including whichever one held a given token's creation — was silently
+  dropped. Raised to 8. Confirmed live afterward: gaps shrank from
+  800-1000+ slots to single digits.
+- **`useBondingCurveTrades`/`useBondingCurveReserves` were pump.fun-only**:
+  they hardcoded pump.fun's bonding-curve PDA derivation and event-log
+  format, so a PumpMeteora-sourced token always showed "No trades yet" /
+  empty reserves regardless of indexing status — a real bug, not just an
+  indexing-lag symptom. Made both source-aware: try pump.fun first, then
+  both pump-meteora builds, using a new client-side Swap-event parser
+  (`lib/meteora.js`, layout ported from the consumer's own Go decoder).
+- **Add Liquidity now refuses a pool with no real on-chain account** up
+  front (a plain `getAccountInfo` check before opening the form), instead
+  of letting the user fill in amounts and hit a 515 at submit time.
+- **Chart's "no candles yet" placeholder now matches the reference's own
+  wording** ("No trades yet — Be the first to buy this token…") instead of
+  a generic "No chart data available" message.
+
 ## Priority order (per explicit user direction, 2026-09-20)
 
 1. **Buying a real token must work, and the kline chart must update from it.**
@@ -21,22 +51,12 @@
   `AddLiquidityV1` fails trying to read live on-chain pool state that
   doesn't exist. Not a bug; needs testing against a pool actually created
   through the app.
-- **Pool creation "signature has invalid length"**: investigated deeply this
-  round. Pulled the actual unsigned transaction bytes the backend returned
-  for a real request and verified byte-by-byte that the compact-u16
-  signature count, the 64-byte placeholder signature slot, the message
-  header (numRequiredSignatures/numReadonlySigned/numReadonlyUnsigned) and
-  the account count are all internally consistent (14 accounts, 1 signer,
-  8 readonly — as expected for the exact instruction set built). Replicated
-  the browser's exact steps in Node — `Transaction.from()`, `partialSign()`
-  with a real keypair, `.serialize()` — and it succeeded cleanly. This rules
-  out the backend and rules out `@solana/web3.js` itself; the bug is almost
-  certainly in how a specific browser wallet extension's own
-  `signTransaction`/`signAndSendTransaction` handles this transaction shape
-  (the reference site has the identical signing code and, as far as we
-  found, the identical bug). Not resolved — would need testing across
-  different wallets (Phantom vs Solflare vs Backpack) to isolate which one
-  chokes and why.
+- **Pool creation "signature has invalid length" — resolved**: switching to
+  wallet-adapter's `sendTransaction` fixed it. Confirmed on-chain: pulled a
+  real signature from a successful create-pool attempt and verified via
+  Helius `getTransaction` — `err: null`. Earlier reports of this error after
+  the fix shipped were from a stale bundle or an intermittent retry, not a
+  standing bug — if it recurs, it needs a fresh repro to investigate further.
 - **Portfolio token name showing as a truncated address**: root-caused —
   Portfolio.js (from the reference) does a pure client-side wallet scan and
   only labels tokens via `/v1/market/index_pump`'s list, which never
@@ -365,15 +385,3 @@ frontend expectations haven't been cross-checked against all of it).
 - **Token-2022 launch-target UI**: replaced the toggle-switch with a 3-tab
   selector (Standard SPL / Token-2022 / PumpMeteora) per requested reference
   design.
-
-## Still open
-
-- **Create Token: PumpMeteora launch target**: UI tab now exists
-  (disabled, "not implemented yet") but isn't wired to anything on-chain.
-  Blocked on the actual PumpMeteora program interface — it isn't a
-  documented public program (websearch only turns up separate Pump.fun and
-  Meteora Dynamic Bonding Curve programs, neither matching the "241xjm…"
-  prefix mentioned), and guessing at instruction/account layouts for an
-  unknown program risks building transactions that either fail outright or
-  behave unexpectedly on-chain. Needs the program ID + IDL from wherever
-  this reference originally came from.

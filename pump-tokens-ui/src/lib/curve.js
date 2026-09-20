@@ -33,7 +33,10 @@ function parseMeteoraCurve(data) {
   };
 }
 
-// Returns { source, priceUsd, virtualSol, virtualToken, realSol, realToken, complete } | null
+// Returns { source, pairAddress, priceUsd, virtualSol, virtualToken, realSol, realToken, complete } | null
+// `pairAddress` is the bonding-curve account's own address — the same identifier
+// the backend uses as a pair's address, needed to route trades/kline lookups for
+// a token the consumer hasn't indexed yet (see TokenDetail.js's fallback).
 export async function readCurveState(connection, mint) {
   if (!mint) return null;
   for (const { source, id } of METEORA_PROGRAMS) {
@@ -42,15 +45,16 @@ export async function readCurveState(connection, mint) {
       const acc = await connection.getAccountInfo(curve);
       if (acc?.data) {
         const p = parseMeteoraCurve(acc.data);
-        if (p) return { source, ...p };
+        if (p) return { source, pairAddress: curve.toBase58(), ...p };
       }
     } catch (_) { /* try next */ }
   }
   try {
-    const acc = await connection.getAccountInfo(deriveBondingCurve(mint));
+    const curve = deriveBondingCurve(mint);
+    const acc = await connection.getAccountInfo(curve);
     if (acc?.data) {
       const p = parseBondingCurve(acc.data);
-      if (p) return { source: 'PumpFun', ...p };
+      if (p) return { source: 'PumpFun', pairAddress: curve.toBase58(), ...p };
     }
   } catch (_) { /* ignore */ }
   return null;

@@ -38,7 +38,20 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
     
   // Pool information
   const [poolInfo, setPoolInfo] = useState(null);
-  
+
+  // Demo/seed pools in the DB don't necessarily have a real on-chain account —
+  // adding liquidity to one always fails server-side. Check before letting the
+  // form open at all, so the failure is immediate and clear instead of a 515
+  // after filling in amounts.
+  const poolAccountExists = async (address) => {
+    try {
+      const info = await connection.getAccountInfo(new PublicKey(address));
+      return !!info;
+    } catch (_) {
+      return false;
+    }
+  };
+
   // Fetch pools on component mount
   useEffect(() => {
     fetchPools();
@@ -91,6 +104,15 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
       const pool = pools.find(p => p.poolState === poolId);
 
       if (pool) {
+        // Some pools in this list are demo/seed data with no real on-chain
+        // account — adding liquidity to one always fails server-side (515).
+        // Refuse before the form even opens, same as if no pool were found.
+        const exists = await poolAccountExists(poolId);
+        if (!exists) {
+          setError('This pool has no on-chain account (demo data) — liquidity cannot be added to it.');
+          setPoolInfo(null);
+          return;
+        }
         setPoolInfo({
           id: pool.poolState,
           tokenA: {
@@ -146,6 +168,11 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
         
         if (data && data.data && data.data.list && data.data.list.length > 0) {
           const pool = data.data.list[0]; // Get first item from list
+          const exists = await poolAccountExists(address);
+          if (!exists) {
+            setError('This pool has no on-chain account (demo data) — liquidity cannot be added to it.');
+            return;
+          }
           setPoolInfo({
             id: address,
             tokenA: {
@@ -184,19 +211,24 @@ const AddLiquidityHeader = ({ onAddLiquidity }) => {
   };
   
   // Create pool info from manual inputs
-  const createManualPoolInfo = () => {
+  const createManualPoolInfo = async () => {
     if (!manualPoolAddress || !manualTokenAAddress || !manualTokenBAddress) {
       setError('Please fill in all required pool details');
       return;
     }
-    
+
     try {
       const price = parseFloat(manualCurrentPrice);
       if (isNaN(price) || price <= 0) {
         setError('Please enter a valid price');
         return;
       }
-      
+      const exists = await poolAccountExists(manualPoolAddress);
+      if (!exists) {
+        setError('This address has no on-chain pool account — liquidity cannot be added to it.');
+        return;
+      }
+
       const poolInfo = {
         id: manualPoolAddress,
         tokenA: {

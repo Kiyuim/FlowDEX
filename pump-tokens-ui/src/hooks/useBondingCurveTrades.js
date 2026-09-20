@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { deriveBondingCurve, parsePumpEventLog } from '../lib/pump';
+import { METEORA_PROGRAMS, deriveMeteoraBondingCurve, parseMeteoraSwapEventLog } from '../lib/meteora';
 
 const CHUNK = 20; // public devnet RPC counts each batch item; keep calls small
 const CHUNK_DELAY_MS = 400;
@@ -31,11 +32,31 @@ export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000
     }
     if (Date.now() < cache.backoffUntil) return;
     try {
-      const curve = deriveBondingCurve(mint);
-      const sigs = await connection.getSignaturesForAddress(curve, { limit });
+      // Source-aware: try pump.fun's curve first (the common case), then both
+      // pump-meteora builds. Whichever program's curve account actually has
+      // signatures is this token's real source.
+      const candidates = [
+        { curve: deriveBondingCurve(mint), parse: parsePumpEventLog },
+        { curve: deriveMeteoraBondingCurve(mint, METEORA_PROGRAMS.meteora), parse: parseMeteoraSwapEventLog },
+        { curve: deriveMeteoraBondingCurve(mint, METEORA_PROGRAMS.meteorav2), parse: parseMeteoraSwapEventLog },
+      ];
+      let curve, parseEvent, sigs = [];
+      for (const c of candidates) {
+        const s = await connection.getSignaturesForAddress(c.curve, { limit });
+        if (s.length) {
+          curve = c.curve;
+          parseEvent = c.parse;
+          sigs = s;
+          break;
+        }
+      }
       if (!sigs.length) {
         setStatus('empty');
         return;
+      }
+      if (cache.curveKey !== curve.toBase58()) {
+        cache.curveKey = curve.toBase58();
+        cache.bySig = new Map();
       }
 
       const newSigs = sigs.filter((s) => !cache.bySig.has(s.signature));
@@ -51,7 +72,7 @@ export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000
           const logs = tx?.meta?.logMessages;
           if (logs) {
             for (const log of logs) {
-              const ev = parsePumpEventLog(log);
+              const ev = parseEvent(log);
               if (ev) events.push({ ...ev, time: ev.timestamp || tx.blockTime || 0, sig });
             }
           }

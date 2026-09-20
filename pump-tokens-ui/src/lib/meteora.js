@@ -78,3 +78,54 @@ export async function buildCreateBondingCurveIx(connection, program, creator, mi
 
   return new TransactionInstruction({ programId: program, keys, data: Buffer.from(data) });
 }
+
+// --- swap event decoding (both pump-meteora builds share this event) ---
+// Mirrors consumer/internal/logic/sol/block/pump_meteora.go's MeteoraSwapEvent.
+// event discriminator = LE uint64 of anchor "event:Swap" = 0xe2710826e8cdc640
+const SWAP_EVENT_DISC = [0x40, 0xc6, 0xcd, 0xe8, 0x26, 0x08, 0x71, 0xe2]; // LE bytes of 0xe2710826e8cdc640
+const SOL_USD = 150; // nominal SOL price (matches lib/curve.js and the backend's devnet fallback)
+const TOKEN_DECIMALS = 6;
+
+export function deriveMeteoraBondingCurve(mint, program) {
+  return pda([enc('bonding_curve'), new PublicKey(mint).toBuffer()], program);
+}
+
+// Plain-number LE u64 read (safe here: lamport/token amounts on a devnet
+// course project never approach Number.MAX_SAFE_INTEGER).
+function u64le(bytes, offset) {
+  let v = 0;
+  for (let i = 7; i >= 0; i--) v = v * 256 + bytes[offset + i];
+  return v;
+}
+
+// Parses a "Program data: <base64>" log line as a pump-meteora Swap event.
+// Layout (145 bytes): disc(8) user(32) mint(32) bondingCurve(32) amountIn(8)
+// direction(1, 0=buy/1=sell) minimumReceive(8) amountOut(8) realSol(8) realToken(8).
+// Returns { isBuy, maker, solAmount, tokenAmount, priceUsd } | null (no event-level
+// timestamp — the caller falls back to the transaction's own blockTime).
+export function parseMeteoraSwapEventLog(log) {
+  if (!log || !log.startsWith('Program data: ')) return null;
+  let bytes;
+  try {
+    bytes = Uint8Array.from(atob(log.slice(14)), (c) => c.charCodeAt(0));
+  } catch (_) {
+    return null;
+  }
+  if (bytes.length < 145) return null;
+  for (let i = 0; i < 8; i++) {
+    if (bytes[i] !== SWAP_EVENT_DISC[i]) return null;
+  }
+  const maker = new PublicKey(bytes.slice(8, 40)).toBase58();
+  const amountIn = u64le(bytes, 104);
+  const direction = bytes[112];
+  const amountOut = u64le(bytes, 121);
+  const realSol = u64le(bytes, 129);
+  const realToken = u64le(bytes, 137);
+  const isBuy = direction === 0;
+  const solAmount = Number(isBuy ? amountIn : amountOut) / 1e9;
+  const tokenAmount = Number(isBuy ? amountOut : amountIn) / 10 ** TOKEN_DECIMALS;
+  const realSolNum = Number(realSol) / 1e9;
+  const realTokenNum = Number(realToken) / 10 ** TOKEN_DECIMALS;
+  const priceUsd = realTokenNum ? (realSolNum / realTokenNum) * SOL_USD : 0;
+  return { isBuy, maker, solAmount, tokenAmount, priceUsd };
+}
