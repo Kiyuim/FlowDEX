@@ -5,6 +5,23 @@ export const SWAP_BUY = 1;
 export const SWAP_SELL = 2;
 export const CHAIN_ID = 100000;
 
+const isRateLimited = (e) => /429|rate limit/i.test(String(e?.message || e));
+
+/** Retry an RPC call on 429 only; any other error (incl. a wallet reject) is rethrown at once. */
+async function withRpcRetry(fn, attempts = 4) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (!isRateLimited(e)) throw e;
+      await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 /**
  * Build (backend), sign (wallet) and submit (devnet RPC) a market order.
  * Routes the send through the app's own connection so it doesn't depend on the
@@ -89,8 +106,12 @@ export async function submitMarketOrder({
       versioned = true;
     }
 
-    // 3) refresh blockhash for legacy txs, sign, submit via the app's devnet RPC
-    const latest = await connection.getLatestBlockhash('finalized');
+    // 3) refresh blockhash for legacy txs, sign, submit via the app's devnet RPC.
+    // 'confirmed', not 'finalized': a finalized blockhash is already ~32 slots
+    // old, and the wallet popup eats more of the ~150-slot validity window —
+    // that's what produced "Blockhash not found" on send. The RPC key is
+    // shared with the indexer and gets rate-limited, so retry the fetch.
+    const latest = await withRpcRetry(() => connection.getLatestBlockhash('confirmed'));
     if (!versioned) {
       tx.recentBlockhash = latest.blockhash;
       tx.feePayer = publicKey;
@@ -99,12 +120,15 @@ export async function submitMarketOrder({
     let signature;
     if (signTransaction) {
       const signed = await signTransaction(tx);
-      signature = await connection.sendRawTransaction(signed.serialize(), {
-        skipPreflight: false,
-        maxRetries: 3,
-      });
+      signature = await withRpcRetry(() =>
+        connection.sendRawTransaction(signed.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+          maxRetries: 3,
+        })
+      );
     } else {
-      signature = await sendTransaction(tx, connection);
+      signature = await sendTransaction(tx, connection, { preflightCommitment: 'confirmed' });
     }
 
     await connection.confirmTransaction(

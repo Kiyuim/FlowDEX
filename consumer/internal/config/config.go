@@ -47,7 +47,11 @@ func (c *Config) ApplyEnvOverrides() {
 	if v := c.KafkaPasswordEnv; v != "" {
 		c.KqSolTrades.Password = v
 	}
-	if s := strings.TrimSpace(c.Sol.NodeUrlEnv); s != "" {
+	nodeEnv := c.Sol.NodeUrlEnv
+	if v := strings.TrimSpace(c.Sol.ConsumerNodeUrlEnv); v != "" {
+		nodeEnv = v
+	}
+	if s := strings.TrimSpace(nodeEnv); s != "" {
 		var urls []string
 		for _, part := range strings.Split(s, ",") {
 			if u := strings.TrimSpace(part); u != "" {
@@ -92,6 +96,12 @@ type Chain struct {
 	// Railway secret) so a Helius API key never lives in git. Comma-separated;
 	// go-zero cannot env-bind a []string, so ApplyEnvOverrides folds it in.
 	NodeUrlEnv string `json:"NodeUrlEnv,optional,env=SOL_NODE_URL"`
+	// ConsumerNodeUrlEnv, when set, takes precedence over SOL_NODE_URL for the
+	// consumer only. The block indexer is by far the heaviest RPC user (one
+	// getBlock per slot per worker); on one shared API key it rate-limits the
+	// trade service and the browser (slow/failed buys, expired blockhashes).
+	// Point it at its own key so indexing load never competes with trading.
+	ConsumerNodeUrlEnv string `json:"ConsumerNodeUrlEnv,optional,env=CONSUMER_SOL_NODE_URL"`
 }
 
 func SaveConf(cf Config) {
