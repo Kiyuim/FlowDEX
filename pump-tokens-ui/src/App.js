@@ -248,11 +248,13 @@ const CustomWalletButton = () => {
       <button
         disabled
         style={{
-          padding: '8px 16px',
+          padding: '8px 14px',
+          fontSize: '13px',
+          fontWeight: 600,
           backgroundColor: '#999',
           color: 'white',
           border: 'none',
-          borderRadius: '4px',
+          borderRadius: '8px',
           cursor: 'not-allowed'
         }}
       >
@@ -270,17 +272,19 @@ const CustomWalletButton = () => {
     });
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#512DA8' }}>
+        <span style={{ fontSize: '13px', fontWeight: 600, color: '#512DA8' }}>
           {wallet?.adapter?.name || 'Wallet'}: {publicKey.toString().slice(0, 4)}...{publicKey.toString().slice(-4)}
         </span>
-        <button 
+        <button
           onClick={disconnect}
           style={{
-            padding: '8px 16px',
+            padding: '8px 14px',
+            fontSize: '13px',
+            fontWeight: 600,
             backgroundColor: '#ff4444',
             color: 'white',
             border: 'none',
-            borderRadius: '4px',
+            borderRadius: '8px',
             cursor: 'pointer'
           }}
         >
@@ -296,11 +300,13 @@ const CustomWalletButton = () => {
         onClick={handleConnect}
         disabled={connecting}
         style={{
-          padding: '8px 16px',
+          padding: '8px 14px',
+          fontSize: '13px',
+          fontWeight: 600,
           backgroundColor: '#512DA8',
           color: 'white',
           border: 'none',
-          borderRadius: '4px',
+          borderRadius: '8px',
           cursor: connecting ? 'not-allowed' : 'pointer',
           opacity: connecting ? 0.6 : 1
         }}

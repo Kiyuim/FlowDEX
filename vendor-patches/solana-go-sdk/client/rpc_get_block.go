@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/blocto/solana-go-sdk/common"
@@ -90,7 +91,16 @@ func convertBlock(v *rpc.GetBlock) (*Block, error) {
 
 			tx, accountKeys, err := parseBase64Tx(vtx.Transaction, transactionMeta)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse tx, err: %v", err)
+				// Patched: don't abort the WHOLE block over one transaction
+				// this SDK can't deserialize. In practice this is Vote-
+				// program traffic using a newer, more compact wire format
+				// this SDK (and gagliardetto/solana-go, independently
+				// checked) predates — irrelevant to swap indexing, but
+				// aborting here silently discarded every real Pump.fun/
+				// Raydium swap in the same block too. See
+				// docs/项目已知问题与修复记录.md.
+				log.Printf("[solana-go-sdk] skipping unparseable transaction in block: %v", err)
+				continue
 			}
 
 			txs = append(txs, BlockTransaction{

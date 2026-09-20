@@ -37,7 +37,9 @@ const TokenCreation = () => {
     freezeAuthority: true,
     updateAuthority: true
   });
-  const [useToken2022, setUseToken2022] = useState(false);
+  // 'standard' | 'token2022' | 'pumpmeteora'
+  const [launchTarget, setLaunchTarget] = useState('standard');
+  const useToken2022 = launchTarget === 'token2022';
   
   // UI state
   const [isLoading, setIsLoading] = useState(false);
@@ -266,20 +268,44 @@ const TokenCreation = () => {
 
         <div className="form-section">
           <div className="program-selector">
-            <label className="toggle-label">
-              <input
-                type="checkbox"
-                checked={useToken2022}
-                onChange={(e) => setUseToken2022(e.target.checked)}
+            <div className="tab-navigation">
+              <button
+                type="button"
+                className={`tab-btn ${launchTarget === 'standard' ? 'active' : ''}`}
+                onClick={() => setLaunchTarget('standard')}
                 disabled={isLoading}
-              />
-              <span className="toggle-slider"></span>
-              <span className="info-text">
-                {useToken2022
-                  ? '🆕 Token-2022 program (Token Extensions)'
-                  : '🔒 Classic SPL Token program'}
-              </span>
-            </label>
+              >
+                🔒 Standard SPL
+              </button>
+              <button
+                type="button"
+                className={`tab-btn ${launchTarget === 'token2022' ? 'active' : ''}`}
+                onClick={() => setLaunchTarget('token2022')}
+                disabled={isLoading}
+              >
+                🆕 Token-2022
+              </button>
+              <button
+                type="button"
+                className={`tab-btn ${launchTarget === 'pumpmeteora' ? 'active' : ''}`}
+                onClick={() => setLaunchTarget('pumpmeteora')}
+                disabled={isLoading}
+              >
+                🌊 PumpMeteora
+              </button>
+            </div>
+            {launchTarget === 'standard' && (
+              <p className="info-text">Classic SPL Token program — works everywhere, no extensions.</p>
+            )}
+            {launchTarget === 'token2022' && (
+              <p className="info-text">Token-2022 (Token Extensions) program — same fields below, minted on the newer token program.</p>
+            )}
+            {launchTarget === 'pumpmeteora' && (
+              <p className="info-text">
+                🚧 Not implemented yet — launching a bonding curve on PumpMeteora needs its on-chain
+                program interface, which isn't in this codebase. Tracked in TODO.md.
+              </p>
+            )}
           </div>
 
           <div className="input-grid">
@@ -434,13 +460,15 @@ const TokenCreation = () => {
             <button
               className="create-token-btn"
               onClick={createToken}
-              disabled={isLoading || !connected}
+              disabled={isLoading || !connected || launchTarget === 'pumpmeteora'}
             >
               {isLoading ? (
                 <>
                   <span className="spinner"></span>
                   Creating Token...
                 </>
+              ) : launchTarget === 'pumpmeteora' ? (
+                <>🚧 Not implemented yet</>
               ) : (
                 <>
                   🚀 Create Token
