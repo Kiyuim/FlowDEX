@@ -85,6 +85,16 @@ func (s *BlockService) SaveTrades(ctx context.Context, chainId int64, tradeMap m
 				return true
 			}
 
+			// A bonding-curve launch (create) must create the pair/token rows
+			// so the token is listed the moment it exists — like pump.fun/GMGN —
+			// not only after its first trade. Its row carries the launch price
+			// (trade_type "create" is excluded from trade lists, stats and
+			// candles, which filter on buy/sell).
+			if (item.SwapName == constants.PumpMeteora || item.SwapName == constants.PumpMeteoraV2) &&
+				item.Type == types.TradePumpCreate {
+				return true
+			}
+
 			// Normal filtering for buy/sell trades
 			if item.Type != types.TradeTypeBuy && item.Type != types.TradeTypeSell {
 				s.Infof("SaveTrades: Filtered out trade with invalid type %s at index %d", item.Type, index)
