@@ -44,8 +44,9 @@ func DetectTokenSource(ctx context.Context, client *ag_rpc.Client, mint string) 
 		if err != nil {
 			continue
 		}
-		info, err := client.GetAccountInfo(ctx, curve)
-		if err == nil && info != nil && info.Value != nil {
+		info, getErr := client.GetAccountInfo(ctx, curve)
+		fmt.Println("PROBE_DEBUG_CANDIDATE", c.source, "program=", c.program, "curve=", curve.String(), "getErr=", getErr, "info nil?", info == nil)
+		if getErr == nil && info != nil && info.Value != nil {
 			return c.source, curve.String(), nil
 		}
 	}
