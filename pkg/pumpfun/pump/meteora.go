@@ -11,7 +11,6 @@ package pumpfun
 // data = disc(global:swap) + amount(u64) + direction(u8: 0=buy,1=sell) + minimum_receive(u64)
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 
@@ -43,12 +42,12 @@ func BuildMeteoraSwapInstructions(rc *rpc.Client, user, mint aSDK.PublicKey, amo
 	globalAta := meteoraATA(globalVault, mint)
 	userAta := meteoraATA(user, mint)
 
-	// team wallets live in the (singleton) config account
-	cfgInfo, err := rc.GetAccountInfo(context.Background(), config)
-	if err != nil || cfgInfo == nil || cfgInfo.Value == nil || cfgInfo.Value.Data == nil {
+	// team wallets live in the (singleton) config account. Retried: devnet RPC
+	// rate-limits aggressively enough that a single-shot read isn't reliable.
+	cfg, err := getAccountWithRetry(rc, config, 3)
+	if err != nil {
 		return nil, fmt.Errorf("meteora config not found: %v", err)
 	}
-	cfg := cfgInfo.Value.Data.GetBinary()
 	if len(cfg) < 8+128 {
 		return nil, fmt.Errorf("meteora config too short: %d", len(cfg))
 	}
@@ -56,11 +55,10 @@ func BuildMeteoraSwapInstructions(rc *rpc.Client, user, mint aSDK.PublicKey, amo
 	teamWalletSecondary := aSDK.PublicKeyFromBytes(cfg[8+96 : 8+128])
 
 	// creator lives in the bonding-curve account
-	bcInfo, err := rc.GetAccountInfo(context.Background(), bondingCurve)
-	if err != nil || bcInfo == nil || bcInfo.Value == nil || bcInfo.Value.Data == nil {
+	bc, err := getAccountWithRetry(rc, bondingCurve, 3)
+	if err != nil {
 		return nil, fmt.Errorf("meteora bonding curve not found for mint %s: %v", mint.String(), err)
 	}
-	bc := bcInfo.Value.Data.GetBinary()
 	if len(bc) < 8+64 {
 		return nil, fmt.Errorf("meteora bonding curve too short: %d", len(bc))
 	}
@@ -116,22 +114,20 @@ func BuildMeteoraSwapInstructionsV2(rc *rpc.Client, user, mint aSDK.PublicKey, a
 	globalAta := meteoraOptATA(globalVault, mint)
 	userAta := meteoraOptATA(user, mint)
 
-	cfgInfo, err := rc.GetAccountInfo(context.Background(), config)
-	if err != nil || cfgInfo == nil || cfgInfo.Value == nil || cfgInfo.Value.Data == nil {
+	cfg, err := getAccountWithRetry(rc, config, 3)
+	if err != nil {
 		return nil, fmt.Errorf("meteora-opt config not found: %v", err)
 	}
-	cfg := cfgInfo.Value.Data.GetBinary()
 	if len(cfg) < 8+128 {
 		return nil, fmt.Errorf("meteora-opt config too short: %d", len(cfg))
 	}
 	teamWallet := aSDK.PublicKeyFromBytes(cfg[8+64 : 8+96])
 	teamWalletSecondary := aSDK.PublicKeyFromBytes(cfg[8+96 : 8+128])
 
-	bcInfo, err := rc.GetAccountInfo(context.Background(), bondingCurve)
-	if err != nil || bcInfo == nil || bcInfo.Value == nil || bcInfo.Value.Data == nil {
+	bc, err := getAccountWithRetry(rc, bondingCurve, 3)
+	if err != nil {
 		return nil, fmt.Errorf("meteora-opt bonding curve not found for mint %s: %v", mint.String(), err)
 	}
-	bc := bcInfo.Value.Data.GetBinary()
 	if len(bc) < 8+64 {
 		return nil, fmt.Errorf("meteora-opt bonding curve too short: %d", len(bc))
 	}
