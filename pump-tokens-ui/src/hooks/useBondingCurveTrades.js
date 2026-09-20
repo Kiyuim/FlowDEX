@@ -6,7 +6,7 @@ import { METEORA_PROGRAMS, deriveMeteoraBondingCurve, parseMeteoraSwapEventLog }
 
 const REQ_DELAY_MS = 250;
 const RATE_LIMIT_COOLDOWN_MS = 60000;
-const MAX_NEW_PER_POLL = 15; // cap RPC calls per poll; the rest catch up next poll
+const MAX_NEW_PER_POLL = 6; // cap RPC calls per poll; the rest catch up next poll
 
 function curveCandidates(mint) {
   return [
@@ -27,7 +27,7 @@ function curveCandidates(mint) {
 // ("Batch requests are only available for paid plans"), not just rate-limit.
 // Already-parsed signatures are cached and skipped on later polls, and a 429
 // puts the hook in a cooldown instead of hammering the endpoint every poll.
-export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000 } = {}) {
+export default function useBondingCurveTrades(mint, { limit = 12, pollMs = 60000 } = {}) {
   const { connection } = useConnection();
   // The wallet adapter may be configured with the public devnet RPC, which is
   // aggressively rate limited and frequently falls behind. When the build has

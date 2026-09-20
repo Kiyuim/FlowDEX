@@ -37,7 +37,7 @@ type ProgramWatcher struct {
 }
 
 const (
-	watcherPollInterval = 2 * time.Second
+	watcherPollInterval = 3 * time.Second
 	watcherSigLimit     = 25
 	watcherSeenCap      = 5000
 )
@@ -103,10 +103,18 @@ func (w *ProgramWatcher) poll(program string) {
 	if c == nil {
 		c = w.sc.GetSolClient()
 	}
-	sigs, err := c.GetSignaturesForAddressWithConfig(ctx, program, client.GetSignaturesForAddressConfig{
-		Limit:      watcherSigLimit,
-		Commitment: rpc.CommitmentConfirmed,
-	})
+	var sigs rpc.GetSignaturesForAddress
+	var err error
+	for attempt := 1; attempt <= 4; attempt++ {
+		sigs, err = c.GetSignaturesForAddressWithConfig(ctx, program, client.GetSignaturesForAddressConfig{
+			Limit:      watcherSigLimit,
+			Commitment: rpc.CommitmentConfirmed,
+		})
+		if err == nil || !strings.Contains(err.Error(), "429") {
+			break
+		}
+		time.Sleep(time.Duration(400*attempt) * time.Millisecond)
+	}
 	if err != nil {
 		w.Errorf("program watcher: getSignaturesForAddress %s: %v", program, err)
 		return
@@ -132,7 +140,15 @@ func (w *ProgramWatcher) poll(program string) {
 }
 
 func (w *ProgramWatcher) indexSignature(ctx context.Context, c *client.Client, sg rpc.SignatureWithStatus) {
-	tx, err := c.GetTransactionWithConfig(ctx, sg.Signature, client.GetTransactionConfig{Commitment: rpc.CommitmentConfirmed})
+	var tx *client.Transaction
+	var err error
+	for attempt := 1; attempt <= 4; attempt++ {
+		tx, err = c.GetTransactionWithConfig(ctx, sg.Signature, client.GetTransactionConfig{Commitment: rpc.CommitmentConfirmed})
+		if err == nil || !strings.Contains(err.Error(), "429") {
+			break
+		}
+		time.Sleep(time.Duration(400*attempt) * time.Millisecond)
+	}
 	if err != nil || tx == nil || tx.Meta == nil {
 		w.Errorf("program watcher: getTransaction %s: %v", sg.Signature, err)
 		w.seenMu.Lock()
