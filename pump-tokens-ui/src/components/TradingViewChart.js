@@ -76,6 +76,11 @@ const TradingViewChart = ({ token, visible = true, mockMode = false }) => {
         borderVisible: false,
         wickUpColor: '#00d4aa',
         wickDownColor: '#ff6838',
+        // Default precision is 2 decimal places (minMove 0.01) — fine for a
+        // $1 token, but a bonding-curve token can be priced at $0.000004.
+        // Without this every candle rounds to $0.00 (O=H=L=C=0), rendering
+        // as an invisible/degenerate line even when the data is real.
+        priceFormat: { type: 'price', precision: 9, minMove: 0.000000001 },
       });
 
       console.log('Candlestick series created successfully:', candlestickSeries);
