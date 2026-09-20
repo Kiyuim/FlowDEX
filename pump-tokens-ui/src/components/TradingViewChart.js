@@ -168,7 +168,8 @@ function applyTicks(base, ticks, intervalSeconds, indexedUntil) {
   const sorted = ticks.slice().sort((a, b) => Number(a.time) - Number(b.time));
   for (const t of sorted) {
     const time = Number(t.time);
-    const price = Number(t.priceUsd);
+    // Same price basis as the backend candles: pool spot after the trade.
+    const price = Number(t.spotPriceUsd) > 0 ? Number(t.spotPriceUsd) : Number(t.priceUsd);
     const vol = Number(t.tokenAmount) || 0;
     if (!(time > cutoff) || !(price > 0) || time <= (indexedUntil || 0)) continue;
     const bucket = Math.floor(time / intervalSeconds) * intervalSeconds;
