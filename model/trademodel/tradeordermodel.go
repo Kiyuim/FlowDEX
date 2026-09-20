@@ -25,6 +25,7 @@ type (
 		UpdateOrderBySelect(ctx context.Context, order *TradeOrder, selectStr ...string) error
 		InsertWithLog(ctx context.Context, data *TradeOrder) error
 		UpdateOrderStatus(ctx context.Context, order *TradeOrder, oldStatus, newStatus int64) (int64, error)
+		FindOpenOrders(ctx context.Context, chainId int64, tokenCa string, tradeType, swapType int64, pageNo, pageSize int64) ([]TradeOrder, int64, error)
 	}
 
 	customTradeOrderModel struct {
@@ -73,6 +74,35 @@ func (c customTradeOrderModel) InsertWithLog(ctx context.Context, order *TradeOr
 		}
 		return NewTradeOrderLogModel(tx).InsertWithOrder(ctx, order)
 	})
+}
+
+// FindOpenOrders lists not-yet-terminal orders (Waiting/Proc/OnChain) for a
+// token, newest first. tradeType/swapType of 0 mean "any".
+func (c customTradeOrderModel) FindOpenOrders(ctx context.Context, chainId int64, tokenCa string, tradeType, swapType int64, pageNo, pageSize int64) ([]TradeOrder, int64, error) {
+	q := c.conn.WithContext(ctx).Model(&TradeOrder{}).
+		Where("chain_id = ? AND token_ca = ? AND status IN ?", chainId, tokenCa, []int64{1, 2, 3})
+	if tradeType > 0 {
+		q = q.Where("trade_type = ?", tradeType)
+	}
+	if swapType > 0 {
+		q = q.Where("swap_type = ?", swapType)
+	}
+
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if pageNo <= 0 {
+		pageNo = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+
+	var orders []TradeOrder
+	err := q.Order("id DESC").Offset(int((pageNo - 1) * pageSize)).Limit(int(pageSize)).Find(&orders).Error
+	return orders, total, err
 }
 
 func (c customTradeOrderModel) UpdateOrderStatus(ctx context.Context, order *TradeOrder, oldStatus, newStatus int64) (int64, error) {
