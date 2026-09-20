@@ -47,6 +47,40 @@ func (s *SlotService) SlotNotCompleted() {
 		if s.maxSlot > window {
 			since = int64(s.maxSlot) - window
 		}
+
+		// Slots with NO row never reached a worker (slotSubscribe gaps before
+		// gap-filling existed, reconnects, restarts). Scan a recent window and
+		// enqueue the absent ones — a bounded batch per tick, oldest first.
+		if s.maxSlot > 0 {
+			scanFrom := int64(s.maxSlot) - 6000
+			if scanFrom < since {
+				scanFrom = since
+			}
+			if have, herr := s.sc.BlockModel.FindSlotsSince(s.ctx, scanFrom); herr == nil {
+				present := make(map[int64]struct{}, len(have))
+				for _, sl := range have {
+					present[sl] = struct{}{}
+				}
+				queued := 0
+				for sl := scanFrom; sl < int64(s.maxSlot)-50 && queued < 40; sl++ {
+					if _, ok := present[sl]; ok {
+						continue
+					}
+					select {
+					case <-s.ctx.Done():
+						return
+					case s.realtimeCh <- uint64(sl):
+						queued++
+					}
+				}
+				if queued > 0 {
+					s.Infof("SlotNotCompleted: enqueued %d absent slots from %d", queued, scanFrom)
+				}
+			} else {
+				s.Error("FindSlotsSince err:", herr)
+			}
+		}
+
 		slots, err := s.sc.BlockModel.FindProcessingSlots(s.ctx, since, 10)
 		if err != nil && !errors.Is(err, solmodel.ErrNotFound) {
 			s.Error("FindProcessingSlots err:", err)

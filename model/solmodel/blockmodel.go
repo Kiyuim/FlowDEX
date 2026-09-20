@@ -28,6 +28,7 @@ type (
 		FindLastSuccessBlock(ctx context.Context) (*Block, error)
 		FindFirstFailBlock(ctx context.Context) (*Block, error)
 		FindProcessingSlots(ctx context.Context, slot int64, limit int) ([]*Block, error)
+		FindSlotsSince(ctx context.Context, since int64) ([]int64, error)
 	}
 
 	customBlockModel struct {
@@ -97,4 +98,12 @@ func (m *defaultBlockModel) FindProcessingSlots(ctx context.Context, slot int64,
 	default:
 		return nil, err
 	}
+}
+
+// FindSlotsSince returns every slot number with a block row at or above
+// `since`, so callers can detect slots that never entered the pipeline.
+func (m *defaultBlockModel) FindSlotsSince(ctx context.Context, since int64) ([]int64, error) {
+	var slots []int64
+	err := m.conn.WithContext(ctx).Model(&Block{}).Where("slot >= ?", since).Order("slot asc").Pluck("slot", &slots).Error
+	return slots, err
 }
