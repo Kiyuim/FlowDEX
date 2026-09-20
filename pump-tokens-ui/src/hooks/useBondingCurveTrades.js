@@ -122,35 +122,66 @@ export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000
   // Solana emits the transaction logs immediately, while the historical
   // signature poll and Railway consumer can trail by minutes under load.
   useEffect(() => {
-    if (!mint || !connection?.onLogs) return undefined;
+    if (!mint) return undefined;
     let cancelled = false;
     const subscriptions = [];
+    const sockets = [];
+    const heliusKey = process.env.REACT_APP_HELIUS_API_KEY;
+    const wsEndpoint = process.env.REACT_APP_SOLANA_WS_URL ||
+      (heliusKey ? `wss://devnet.helius-rpc.com/?api-key=${heliusKey}` : null);
+
+    const handleLogs = (parse, logInfo) => {
+      if (cancelled || logInfo?.err || !logInfo?.logs) return;
+      const events = logInfo.logs
+        .map((log) => parse(log))
+        .filter(Boolean)
+        .map((event) => ({ ...event, time: Math.floor(Date.now() / 1000), sig: logInfo.signature }));
+      if (!events.length) return;
+      const cache = cacheRef.current;
+      if (cache.mint !== mint) return;
+      cache.bySig.set(logInfo.signature, events);
+      setTrades((previous) => {
+        const seen = new Set();
+        return [...events, ...previous]
+          .filter((trade) => {
+            const key = `${trade.sig}:${trade.time}:${trade.priceUsd}:${trade.tokenAmount}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          })
+          .sort((a, b) => b.time - a.time)
+          .slice(0, limit);
+      });
+      setStatus('ok');
+    };
+
     const subscribe = async () => {
       for (const { curve, parse } of curveCandidates(mint)) {
+        if (wsEndpoint && typeof WebSocket !== 'undefined') {
+          try {
+            const ws = new WebSocket(wsEndpoint);
+            sockets.push(ws);
+            ws.onopen = () => ws.send(JSON.stringify({
+              jsonrpc: '2.0', id: 1, method: 'logsSubscribe',
+              params: [{ mentions: [curve.toBase58()] }, { commitment: 'confirmed' }],
+            }));
+            ws.onmessage = (event) => {
+              try {
+                const msg = JSON.parse(event.data);
+                const value = msg?.params?.result?.value;
+                if (value) handleLogs(parse, { logs: value.logs, err: value.err, signature: value.signature });
+              } catch (_) { /* ignore malformed provider messages */ }
+            };
+            ws.onerror = () => ws.close();
+            continue;
+          } catch (e) {
+            console.warn('Helius logs WebSocket unavailable', e);
+          }
+        }
+        if (!connection?.onLogs) continue;
         try {
           const id = await connection.onLogs(curve, (logInfo) => {
-            if (cancelled || logInfo?.err || !logInfo?.logs) return;
-            const events = logInfo.logs
-              .map((log) => parse(log))
-              .filter(Boolean)
-              .map((event) => ({ ...event, time: Math.floor(Date.now() / 1000), sig: logInfo.signature }));
-            if (!events.length) return;
-            const cache = cacheRef.current;
-            if (cache.mint !== mint) return;
-            cache.bySig.set(logInfo.signature, events);
-            setTrades((previous) => {
-              const seen = new Set();
-              return [...events, ...previous]
-                .filter((trade) => {
-                  const key = `${trade.sig}:${trade.time}:${trade.priceUsd}:${trade.tokenAmount}`;
-                  if (seen.has(key)) return false;
-                  seen.add(key);
-                  return true;
-                })
-                .sort((a, b) => b.time - a.time)
-                .slice(0, limit);
-            });
-            setStatus('ok');
+            handleLogs(parse, logInfo);
           }, 'confirmed');
           if (!cancelled) subscriptions.push(id);
           else await connection.removeOnLogsListener(id);
@@ -164,6 +195,7 @@ export default function useBondingCurveTrades(mint, { limit = 80, pollMs = 20000
     subscribe();
     return () => {
       cancelled = true;
+      sockets.forEach((ws) => { ws.onclose = null; ws.close(); });
       for (const id of subscriptions) connection.removeOnLogsListener(id).catch(() => {});
     };
   }, [connection, mint, limit]);

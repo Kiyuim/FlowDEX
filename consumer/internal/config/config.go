@@ -48,7 +48,7 @@ func (c *Config) ApplyEnvOverrides() {
 		c.KqSolTrades.Password = v
 	}
 	nodeEnv := c.Sol.NodeUrlEnv
-	if v := strings.TrimSpace(c.Sol.ConsumerNodeUrlEnv); v != "" {
+	if v := strings.TrimSpace(c.Sol.ConsumerNodeUrlEnv); v != "" && !strings.Contains(v, "api.devnet.solana.com") {
 		nodeEnv = v
 	}
 	if s := strings.TrimSpace(nodeEnv); s != "" {

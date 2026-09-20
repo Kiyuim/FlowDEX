@@ -10,6 +10,7 @@ import useBondingCurveReserves from '../hooks/useBondingCurveReserves';
 import useWatchlist from '../hooks/useWatchlist';
 import { shortAddr } from '../lib/trade';
 import { readCurveState } from '../lib/curve';
+import { getSolUsd } from '../lib/solPrice';
 
 import { mergeToken, normalizeToken, tokenDisplayName, finiteNumber } from '../lib/tokenData';
 
@@ -78,7 +79,7 @@ export default function TokenDetail() {
     const cutoff = now - 86400;
     const recent = trades.filter((t) => t.time >= cutoff);
     const price = trades[0].priceUsd;
-    const vol24h = recent.reduce((s, t) => s + t.solAmount * 150, 0); // nominal SOL≈$150
+    const vol24h = recent.reduce((s, t) => s + t.solAmount * getSolUsd(), 0);
     const buys24h = recent.filter((t) => t.isBuy).length;
     const traders = new Set(trades.map((t) => t.maker)).size;
     const older = trades.filter((t) => t.time < cutoff);
@@ -96,12 +97,11 @@ export default function TokenDetail() {
   const priceStr = (p) => (p == null ? '—' : p < 0.001 ? `$${p.toExponential(2)}` : `$${p.toFixed(6)}`);
   // Prefer the same indexed market data used by Discovery; direct RPC trades
   // are only a recent sample, not the full 24-hour volume.
-  // The indexed token price can trail the chain by several minutes while the
-  // consumer catches up. Prefer the newest direct-chain trade so the header,
-  // chart context, and limit panel all show the same current price.
-  const displayPrice = finiteNumber(stats?.price) ?? finiteNumber(token?.price) ?? (curveState?.mint === mint ? curveState.priceUsd : null) ?? null;
-  const displayVolume = finiteNumber(token?.vol24h);
-  const displayChange = finiteNumber(token?.change24);
+  // Real stats computed from on-chain trades (following reference fun_dex_v2-devnet).
+  const displayPrice = stats?.price ?? (curveState?.mint === mint ? curveState.priceUsd : null) ?? finiteNumber(token?.price) ?? null;
+  const displayVolume = stats?.vol24h ?? finiteNumber(token?.vol24h);
+  const displayChange = stats?.change ?? finiteNumber(token?.change24);
+  const displayMktCap = displayPrice != null ? displayPrice * (finiteNumber(token?.totalSupply) || 1e9) : finiteNumber(token?.mktCap);
   const currentCurve = curveState?.mint === mint ? curveState : null;
   const poolRes = reserves || currentCurve;
 
@@ -209,7 +209,7 @@ export default function TokenDetail() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             <Stat
               label="Price"
               value={
@@ -225,8 +225,22 @@ export default function TokenDetail() {
               }
             />
             <Stat label="24h Volume" value={displayVolume != null ? money(displayVolume) : '—'} />
-            <Stat label="Market Cap" value={money(finiteNumber(token?.mktCap))} />
-            <Stat label="24h Trades" value={fmt(finiteNumber(token?.txs24h), 0)} />
+            <Stat label="Market Cap" value={displayMktCap != null ? money(displayMktCap) : '—'} />
+            <Stat
+              label="24h Trades"
+              value={
+                stats ? (
+                  <span>
+                    {fmt(stats.txns24h, 0)}{' '}
+                    <span className="text-[11px] text-up">{stats.buys24h}B</span>
+                    <span className="text-[11px] text-muted">/</span>
+                    <span className="text-[11px] text-down">{stats.sells24h}S</span>
+                  </span>
+                ) : (
+                  fmt(finiteNumber(token?.txs24h), 0)
+                )
+              }
+            />
             <Stat label="Traders" value={fmt(stats?.traders, 0)} />
           </div>
 

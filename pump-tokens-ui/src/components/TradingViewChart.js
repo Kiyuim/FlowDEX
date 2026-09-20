@@ -94,11 +94,15 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
     liveTradesRef.current = liveTrades || [];
     if (!candlestickSeriesRef.current || !liveTrades?.length) return;
     const merged = mergeLiveTradeCandles(candleDataRef.current, liveTrades, interval);
+    if (!merged.length) return;
     candleDataRef.current = merged;
+    // Smoothly update the latest candle via .update() to paint live wicks (插针)
+    // without tearing down the entire series with setData().
+    const lastBar = merged[merged.length - 1];
     try {
+      candlestickSeriesRef.current.update(lastBar);
+    } catch (_) {
       candlestickSeriesRef.current.setData(merged);
-    } catch (e) {
-      console.warn('Unable to merge live trades into kline:', e);
     }
   }, [liveTrades, interval]);
 
@@ -620,10 +624,24 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
 
       console.log('Transformed chart data:', chartData);
 
-      if (chartData.length > 0) {
-        const mergedChartData = mergeLiveTradeCandles(chartData, liveTradesRef.current, selectedInterval);
-        candlestickSeriesRef.current.setData(mergedChartData);
-        candleDataRef.current = mergedChartData;
+      const mergedChartData = mergeLiveTradeCandles(chartData, liveTradesRef.current, selectedInterval);
+
+      if (mergedChartData.length > 0) {
+        if (!background || !candleDataRef.current.length) {
+          candlestickSeriesRef.current.setData(mergedChartData);
+          candleDataRef.current = mergedChartData;
+        } else {
+          // In background refresh, do NOT tear down the chart with setData!
+          // Only update the latest candle to prevent wiping out live wicks (插针) or resetting crosshairs.
+          candleDataRef.current = mergedChartData;
+          const lastPoint = mergedChartData[mergedChartData.length - 1];
+          try {
+            candlestickSeriesRef.current.update(lastPoint);
+          } catch (_) {
+            candlestickSeriesRef.current.setData(mergedChartData);
+          }
+        }
+        setError('');
         
         // Add real-time connection status indicator
         const lastDataPoint = mergedChartData[mergedChartData.length - 1];
@@ -658,9 +676,9 @@ const TradingViewChart = ({ token, liveTrades = [], visible = true, mockMode = f
     setClickInfo(null);
     if (token?.pairAddress && visible) {
       fetchKlineData(interval);
-      // WebSocket is the low-latency path; keep a short polling safety net so
+      // WebSocket is the low-latency path; keep a 15s polling safety net so
       // a dropped Redis subscription never leaves the chart visibly stale.
-      const timer = window.setInterval(() => fetchKlineData(interval, true), 5000);
+      const timer = window.setInterval(() => fetchKlineData(interval, true), 15000);
       return () => { window.clearInterval(timer); ++fetchGeneration.current; pendingFetch.current?.abort(); pendingFetch.current = null; };
     }
   }, [token?.pairAddress, interval, visible, refreshKey]);

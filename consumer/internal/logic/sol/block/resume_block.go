@@ -66,7 +66,10 @@ func (s *ResumeBlockService) ResumeBlock(ctx context.Context, slot int64) {
 	}
 
 	block := &solmodel.Block{
-		Slot: slot,
+		Slot:      slot,
+		BlockTime: time.Now(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	blockInfo, err := GetSolBlockInfo(s.sc.GetSolClient(), ctx, uint64(slot))

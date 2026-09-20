@@ -130,7 +130,10 @@ func (s *BlockService) ProcessBlock(ctx context.Context, slot int64) {
 	switch {
 	case err != nil && strings.Contains(err.Error(), "record not found"):
 		block = &solmodel.Block{
-			Slot: slot,
+			Slot:      slot,
+			BlockTime: time.Now(),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 	case err == nil:
 		// if block.Status == constants.BlockProcessed || block.Status == constants.BlockSkipped {
@@ -147,6 +150,15 @@ func (s *BlockService) ProcessBlock(ctx context.Context, slot int64) {
 	blockInfo, err := GetSolBlockInfo(s.sc.GetSolClient(), ctx, uint64(slot))
 
 	if err != nil || blockInfo == nil {
+		if block.BlockTime.IsZero() {
+			block.BlockTime = time.Now()
+		}
+		if block.CreatedAt.IsZero() {
+			block.CreatedAt = time.Now()
+		}
+		if block.UpdatedAt.IsZero() {
+			block.UpdatedAt = time.Now()
+		}
 		if err != nil && strings.Contains(err.Error(), "was skipped") {
 			block.Status = constants.BlockSkipped
 			s.Infof("processBlock:%v getSolBlockInfo was skipped, err: %v", slot, err)

@@ -36,6 +36,9 @@
 - The header now also prefers the newest direct-chain trade over stale indexed
   `token.price`, keeping Price, Recent trades, and limit `now` aligned while
   the consumer is behind.
+- Replaced the browser's indirect RPC log subscription with a direct Helius
+  `logsSubscribe` WebSocket when `REACT_APP_HELIUS_API_KEY` is configured;
+  this is the real-time path for trades and K-line updates.
 - K-line now merges the direct on-chain trade stream into the visible candles,
   so the latest trades appear immediately even while the Railway consumer is
   catching up.
