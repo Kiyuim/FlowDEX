@@ -74,44 +74,51 @@ func main() {
 
 	{
 		ctx := svc.NewSolServiceContext(c)
-		var realChan = make(chan uint64, 50)
-		var historyChan = make(chan uint64, 50)
-		// var errChan = make(chan uint64, 1)
-		// var resumeChan = make(chan uint64, 50)
 
-		// 消费者
-		for i := 0; i < c.Consumer.Concurrency; i++ {
-			fmt.Println("GetBlockFromHttp now ****************")
+		if c.Consumer.DisableSlotScanner {
+			logx.Info("CONSUMER_DISABLE_SLOT_SCANNER set — skipping the full-chain block scanner; ProgramWatcher covers our own launch programs only")
+		} else {
+			var realChan = make(chan uint64, 50)
+			var historyChan = make(chan uint64, 50)
+			// var errChan = make(chan uint64, 1)
+			// var resumeChan = make(chan uint64, 50)
 
-			sg.Add(block.NewBlockService(ctx, "block-real", realChan, i))
+			// 消费者
+			for i := 0; i < c.Consumer.Concurrency; i++ {
+				fmt.Println("GetBlockFromHttp now ****************")
+
+				sg.Add(block.NewBlockService(ctx, "block-real", realChan, i))
+			}
+
+			// 存量 (backfill). historyChan MUST have a consumer: with SOL_STARTBLOCK
+			// set, slot.consumeHistoricalSlots() blocks forever once the 50-slot
+			// buffer fills, which also stalls historicalDone and — with it — the
+			// real-time slot loop that waits on it. Kept deliberately small (not
+			// c.Consumer.Concurrency) so a post-restart backfill doesn't compete
+			// with real-time traffic for the shared RPC provider's quota.
+			const historyWorkers = 2
+			for i := 0; i < historyWorkers; i++ {
+				sg.Add(block.NewBlockService(ctx, "block-history", historyChan, i))
+			}
+
+			// // 失败
+			// for i := 0; i < 10; i++ {
+			// 	sg.Add(block.NewBlockService(ctx, "block-error", errChan, i))
+			// }
+
+			// // 历史恢复
+			// for i := 0; i < 50; i++ {
+			// 	sg.Add(block.NewResumeBlockService(ctx, "block-resume", resumeChan, i))
+			// }
+
+			// 生产者
+			sg.Add(slot.NewSlotServiceGroup(ctx, realChan, historyChan))
 		}
-
-		// 存量 (backfill). historyChan MUST have a consumer: with SOL_STARTBLOCK
-		// set, slot.consumeHistoricalSlots() blocks forever once the 50-slot
-		// buffer fills, which also stalls historicalDone and — with it — the
-		// real-time slot loop that waits on it. Kept deliberately small (not
-		// c.Consumer.Concurrency) so a post-restart backfill doesn't compete
-		// with real-time traffic for the shared RPC provider's quota.
-		const historyWorkers = 2
-		for i := 0; i < historyWorkers; i++ {
-			sg.Add(block.NewBlockService(ctx, "block-history", historyChan, i))
-		}
-
-		// // 失败
-		// for i := 0; i < 10; i++ {
-		// 	sg.Add(block.NewBlockService(ctx, "block-error", errChan, i))
-		// }
-
-		// // 历史恢复
-		// for i := 0; i < 50; i++ {
-		// 	sg.Add(block.NewResumeBlockService(ctx, "block-resume", resumeChan, i))
-		// }
-
-		// 生产者
-		sg.Add(slot.NewSlotServiceGroup(ctx, realChan, historyChan))
 
 		// Signature-driven indexing for our own launch programs — lands their
-		// trades/creates in seconds regardless of slot-scanner backlog.
+		// trades/creates in seconds regardless of slot-scanner backlog. Runs
+		// unconditionally: it's the cheap path (~1 call/s) and is what Discover
+		// falls back to entirely when the scanner is disabled above.
 		sg.Add(block.NewProgramWatcher(ctx))
 
 		solTicker := ticker.NewSolTicker(ctx)

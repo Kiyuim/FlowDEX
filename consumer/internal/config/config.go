@@ -66,6 +66,12 @@ func (c *Config) ApplyEnvOverrides() {
 
 type Consumer struct {
 	Concurrency int `json:"Concurrency,env=CONSUMER_CONCURRENCY"`
+	// DisableSlotScanner skips the full-chain block-by-block scanner (slot
+	// websocket + block-real/block-history workers), which fetches every
+	// devnet block regardless of program and exhausts any RPC plan's quota
+	// in minutes. ProgramWatcher (signature-driven, our own launch programs
+	// only) keeps running either way and is what actually needs to stay up.
+	DisableSlotScanner bool `json:"DisableSlotScanner,optional,env=CONSUMER_DISABLE_SLOT_SCANNER"`
 }
 
 // env overrides belong INSIDE the single json tag as a field option
