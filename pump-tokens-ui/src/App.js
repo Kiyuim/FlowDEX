@@ -67,6 +67,30 @@ const getRpcEndpoint = () => {
   return 'https://api.devnet.solana.com';
 };
 
+// Second provider (e.g. Alchemy) to fall over to when the primary RPC returns
+// 429 "max usage reached" — Helius devnet free-tier credits are shared across
+// every key on the account and exhaust fast under real traffic. Optional: if
+// unset, requests just fail on 429 same as before.
+const FALLBACK_RPC_URL = process.env.REACT_APP_SOLANA_RPC_FALLBACK_URL || '';
+
+// Wraps fetch so every RPC call made through the Connection (getBalance,
+// getAccountInfo, sendTransaction, ...) transparently retries against
+// FALLBACK_RPC_URL on a 429, instead of failing the whole page/action.
+function createFailoverFetch(fallbackUrl) {
+  return async (input, init) => {
+    const res = await fetch(input, init);
+    if (res.status === 429 && fallbackUrl) {
+      console.warn('⚠️ Primary RPC rate-limited (429) — retrying via fallback endpoint');
+      return fetch(fallbackUrl, init);
+    }
+    return res;
+  };
+}
+
+const connectionConfig = FALLBACK_RPC_URL
+  ? { commitment: 'confirmed', fetch: createFailoverFetch(FALLBACK_RPC_URL) }
+  : { commitment: 'confirmed' };
+
 const endpoint = getRpcEndpoint();
 console.log('🔗 Using Solana RPC endpoint:', endpoint.replace(/api-key=[^&]+/, 'api-key=***'));
 
@@ -591,7 +615,7 @@ function App() {
   ];
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
+    <ConnectionProvider endpoint={endpoint} config={connectionConfig}>
       <WalletProvider wallets={wallets} autoConnect={true}>
         <WalletModalProvider>
           <BrowserRouter>
