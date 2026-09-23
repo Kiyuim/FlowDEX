@@ -8,6 +8,7 @@ import (
 	"dex/pkg/raydium/clmm"
 	"dex/pkg/raydium/cpmm"
 	"dex/pkg/sol"
+	"dex/pkg/solprice"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -212,6 +213,18 @@ func (s *BlockService) processBlockInfo(ctx context.Context, block *solmodel.Blo
 	solPrice := s.GetBlockSolPrice(ctx, blockInfo, tokenAccountMap)
 	if solPrice == 0 {
 		solPrice = s.solPrice
+	}
+	// s.solPrice is never actually written on this path (only resume_block.go's
+	// now-unused ResumeBlock sets it), and GetBlockSolPrice only finds a price
+	// when this exact block/synthetic-tx happens to contain a stablecoin swap —
+	// for ProgramWatcher's single-tx synthetic blocks that's essentially never.
+	// Trades priced at $0 get filtered out downstream, which is why kline/volume
+	// silently went empty. Fall back to the independent real-world price feed.
+	if solPrice == 0 {
+		solPrice = solprice.GetSolUsdPrice()
+	}
+	if solPrice > 0 {
+		s.solPrice = solPrice
 	}
 
 	fmt.Println("sol price is:", solPrice)
