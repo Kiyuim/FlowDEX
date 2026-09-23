@@ -86,10 +86,16 @@ func main() {
 			sg.Add(block.NewBlockService(ctx, "block-real", realChan, i))
 		}
 
-		// // 存量
-		// for i := 0; i < c.Consumer.Concurrency; i++ {
-		// 	sg.Add(block.NewBlockService(ctx, "block-history", historyChan, i))
-		// }
+		// 存量 (backfill). historyChan MUST have a consumer: with SOL_STARTBLOCK
+		// set, slot.consumeHistoricalSlots() blocks forever once the 50-slot
+		// buffer fills, which also stalls historicalDone and — with it — the
+		// real-time slot loop that waits on it. Kept deliberately small (not
+		// c.Consumer.Concurrency) so a post-restart backfill doesn't compete
+		// with real-time traffic for the shared RPC provider's quota.
+		const historyWorkers = 2
+		for i := 0; i < historyWorkers; i++ {
+			sg.Add(block.NewBlockService(ctx, "block-history", historyChan, i))
+		}
 
 		// // 失败
 		// for i := 0; i < 10; i++ {

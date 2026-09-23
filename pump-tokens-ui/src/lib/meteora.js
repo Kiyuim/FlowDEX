@@ -29,6 +29,25 @@ const enc = (s) => new TextEncoder().encode(s);
 function pda(seeds, program) {
   return PublicKey.findProgramAddressSync(seeds, program)[0];
 }
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// The shared Helius key (frontend + Railway backend) can hit its RPS/CU cap in
+// bursts — e.g. the consumer's slot backfill after a restart. Retry the same
+// way the Go backend does (program_watcher.go): 4 attempts, 400ms * attempt.
+async function getAccountInfoWithRetry(connection, pubkey) {
+  let lastErr;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      return await connection.getAccountInfo(pubkey);
+    } catch (err) {
+      lastErr = err;
+      if (!/429|max usage reached/i.test(err.message || '')) throw err;
+      await sleep(400 * attempt);
+    }
+  }
+  throw lastErr;
+}
 // borsh string: u32 LE length + utf8 bytes
 function borshStr(s) {
   const d = enc(s);
@@ -47,7 +66,7 @@ export async function buildCreateBondingCurveIx(connection, program, creator, mi
   const metadata = pda([enc('metadata'), METADATA_PROGRAM.toBuffer(), mint.toBuffer()], METADATA_PROGRAM);
   const globalAta = getAssociatedTokenAddressSync(mint, globalVault, true);
 
-  const cfg = await connection.getAccountInfo(config);
+  const cfg = await getAccountInfoWithRetry(connection, config);
   if (!cfg || !cfg.data || cfg.data.length < 8 + 96) {
     throw new Error('This program has no initialized config on-chain — cannot create a token here.');
   }

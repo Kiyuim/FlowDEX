@@ -77,8 +77,11 @@ func (s *SlotService) consumeHistoricalSlots() {
 			return
 		case s.historicalCh <- slot: // 向通道发送 Slot
 			// s.Infof("send slot: %v to historicalCh", slot)
-			// 400 / 5
-			time.Sleep(5 * time.Millisecond)
+			// Throttled well below real-time traffic (was 5ms/200 per sec) so a
+			// post-restart backfill doesn't burn through the shared RPC
+			// provider's rate limit and starve live requests (incl. the
+			// frontend's own RPC calls, e.g. token creation).
+			time.Sleep(50 * time.Millisecond)
 		}
 	}
 	// 存量消费完毕，关闭存量通道
