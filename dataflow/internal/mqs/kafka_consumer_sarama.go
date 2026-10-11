@@ -99,11 +99,14 @@ func (c *SaramaKafkaConsumer) Start() {
 	config.Net.MaxOpenRequests = 1024
 	config.ChannelBufferSize = 256
 
-	// SASL configurations (EXACT same as producer)
-	config.Net.SASL.Enable = true
-	config.Net.SASL.Mechanism = sarama.SASLTypePlaintext
-	config.Net.SASL.User = c.config.Username
-	config.Net.SASL.Password = c.config.Password
+	// SASL only against a SASL-secured broker, same rule as the consumer's
+	// producer: no creds (self-hosted Redpanda) means plaintext, no auth.
+	if c.config.Username != "" && c.config.Password != "" {
+		config.Net.SASL.Enable = true
+		config.Net.SASL.Mechanism = sarama.SASLTypePlaintext
+		config.Net.SASL.User = c.config.Username
+		config.Net.SASL.Password = c.config.Password
+	}
 
 	config.ClientID = "dataflow-consumer"
 

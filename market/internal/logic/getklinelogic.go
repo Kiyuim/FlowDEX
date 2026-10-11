@@ -153,7 +153,7 @@ func (l *GetKlineLogic) getKline(in *marketclient.GetKlineRequest) (*marketclien
 		}
 
 		if errors.Is(err, gormc.ErrNotFound) || len(klineDb) == 0 {
-			klineDb, err = data.NewKlineMysqlRepo(l.svcCtx.DB).QueryKline(l.ctx, constants.KlineInterval(in.Interval), in.ChainId, in.PairAddress, 0, in.ToTimestamp, int(countIntervals))
+			klineDb, err = data.NewKlineMysqlRepo(l.svcCtx.DB).QueryLatestKline(l.ctx, constants.KlineInterval(in.Interval), in.ChainId, in.PairAddress, in.ToTimestamp, 12)
 			if err != nil && !errors.Is(err, gormc.ErrNotFound) {
 				logx.Errorf("Failed to QueryKline: %v", err)
 				return nil, err

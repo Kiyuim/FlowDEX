@@ -154,33 +154,36 @@ func (m *defaultTradeModel) BatchInsertTrades(ctx context.Context, trades []*Tra
 		}
 
 		// Skip rows already stored (a re-fetched/backfilled block must not
-		// double-count its trades — there is no unique key on tx_hash).
+		// double-count its trades — there is no unique key on tx_hash). Keyed on
+		// tx_hash+pair+type, not hash_id: hash_id is slot#tx_index, and the
+		// program watcher (single-tx fetch) always has tx_index 0 while the block
+		// scanner has the real one, so the same trade got two hash_ids.
 		hashes := make([]string, 0, len(group))
 		for _, t := range group {
 			hashes = append(hashes, t.TxHash)
 		}
 		type existing struct {
 			TxHash    string
-			HashId    string
+			PairAddr  string
 			TradeType string
 		}
 		var have []existing
-		_ = m.conn.WithContext(ctx).Table(table).Select("tx_hash, hash_id, trade_type").Where("tx_hash IN ?", hashes).Scan(&have).Error
-		if len(have) > 0 {
-			seen := make(map[string]struct{}, len(have))
-			for _, h := range have {
-				seen[h.TxHash+"#"+h.HashId+"#"+h.TradeType] = struct{}{}
+		_ = m.conn.WithContext(ctx).Table(table).Select("tx_hash, pair_addr, trade_type").Where("tx_hash IN ?", hashes).Scan(&have).Error
+		seen := make(map[string]struct{}, len(have)+len(group))
+		for _, h := range have {
+			seen[h.TxHash+"#"+h.PairAddr+"#"+h.TradeType] = struct{}{}
+		}
+		kept := group[:0]
+		for _, t := range group {
+			k := t.TxHash + "#" + t.PairAddr + "#" + t.TradeType
+			if _, dup := seen[k]; !dup {
+				seen[k] = struct{}{}
+				kept = append(kept, t)
 			}
-			kept := group[:0]
-			for _, t := range group {
-				if _, dup := seen[t.TxHash+"#"+t.HashId+"#"+t.TradeType]; !dup {
-					kept = append(kept, t)
-				}
-			}
-			group = kept
-			if len(group) == 0 {
-				continue
-			}
+		}
+		group = kept
+		if len(group) == 0 {
+			continue
 		}
 
 		// Batch insert data into the table

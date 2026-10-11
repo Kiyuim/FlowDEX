@@ -2,11 +2,13 @@ package data
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"dex/market/internal/constants"
 
+	"github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
 )
 
@@ -57,21 +59,41 @@ func (repo *KlineMysqlRepo) QueryLatestPairKline(ctx context.Context, interval c
 }
 
 func (repo *KlineMysqlRepo) QueryKline(ctx context.Context, interval constants.KlineInterval, chainId int64, pairAddress string, fromTime, toTime int64, limit int) (result []Kline, err error) {
-	if repo.TableName(interval, fromTime) != repo.TableName(interval, toTime) {
-		var resultFirst, resultLast []Kline
-		err = repo.db.WithContext(ctx).Table(repo.TableName(interval, fromTime)).
-			Where("chain_id = ? and pair_address = ? and candle_time between ? and ?", chainId, pairAddress, fromTime, toTime).
-			Order("id desc").Limit(limit).Scan(&resultFirst).Error
+	fromTable, toTable := repo.TableName(interval, fromTime), repo.TableName(interval, toTime)
+	result, err = repo.queryKlineTable(ctx, toTable, chainId, pairAddress, fromTime, toTime, limit)
+	if err != nil || fromTable == toTable {
+		return result, err
+	}
+	first, err := repo.queryKlineTable(ctx, fromTable, chainId, pairAddress, fromTime, toTime, limit)
+	return append(result, first...), err
+}
 
-		err = repo.db.WithContext(ctx).Table(repo.TableName(interval, toTime)).
-			Where("chain_id = ? and pair_address = ? and candle_time between ? and ?", chainId, pairAddress, fromTime, toTime).
-			Order("id desc").Limit(limit).Scan(&resultLast).Error
-
-		result = append(resultLast, resultFirst...)
-	} else {
-		err = repo.db.WithContext(ctx).Table(repo.TableName(interval, toTime)).
-			Where("chain_id = ? and pair_address = ? and candle_time between ? and ?", chainId, pairAddress, fromTime, toTime).
-			Order("id desc").Limit(limit).Scan(&result).Error
+// queryKlineTable treats a missing monthly shard as empty: dataflow only
+// creates trade_kline_<interval>_<YYYYMM> on that month's first candle.
+func (repo *KlineMysqlRepo) queryKlineTable(ctx context.Context, table string, chainId int64, pairAddress string, fromTime, toTime int64, limit int) (result []Kline, err error) {
+	err = repo.db.WithContext(ctx).Table(table).
+		Where("chain_id = ? and pair_address = ? and candle_time between ? and ?", chainId, pairAddress, fromTime, toTime).
+		Order("id desc").Limit(limit).Scan(&result).Error
+	var myErr *mysql.MySQLError
+	if errors.As(err, &myErr) && myErr.Number == 1146 {
+		return nil, nil
 	}
 	return result, err
+}
+
+// QueryLatestKline returns the pair's newest candle at or before toTime,
+// walking back one monthly shard at a time (up to maxMonths), so a token that
+// hasn't traded this month still shows its last price instead of no chart.
+func (repo *KlineMysqlRepo) QueryLatestKline(ctx context.Context, interval constants.KlineInterval, chainId int64, pairAddress string, toTime int64, maxMonths int) ([]Kline, error) {
+	month := time.Unix(toTime, 0).UTC()
+	month = time.Date(month.Year(), month.Month(), 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < maxMonths; i++ {
+		table := repo.TableName(interval, month.Unix())
+		result, err := repo.queryKlineTable(ctx, table, chainId, pairAddress, 0, toTime, 1)
+		if err != nil || len(result) > 0 {
+			return result, err
+		}
+		month = month.AddDate(0, -1, 0)
+	}
+	return nil, nil
 }

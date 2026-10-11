@@ -124,6 +124,7 @@ func (t *TradeConsumer) Consume(ctx context.Context, key kafka.Message) error {
 		logc.Infof(ctx, "tradeMsg,chain id: %v, pair addr: %v, tx hash: %v, price: %v", msg.ChainId, msg.PairAddr, msg.TxHash, msg.TokenPriceUSD)
 	}
 
+	tradeMsg = t.dropSeenTrades(ctx, tradeMsg)
 	if len(tradeMsg) == 0 {
 		return nil
 	}
@@ -339,4 +340,36 @@ func (t *TradeConsumer) Close() error {
 	t.cancel()
 	t.workerPool.Release()
 	return nil
+}
+
+// seenTradeTTL bounds how long a trade is remembered for de-duplication;
+// re-indexing and Kafka replays happen well within it.
+const seenTradeTTL = 7 * 24 * time.Hour
+
+// dropSeenTrades skips trades already folded into candles. The consumer
+// re-publishes a block's trades whenever it re-indexes that block (it only
+// de-duplicates the trade table), which would otherwise double candle volume.
+// Fails open on Redis errors: a missing candle is worse than a doubled one.
+func (t *TradeConsumer) dropSeenTrades(ctx context.Context, trades []*model.TradeWithPair) []*model.TradeWithPair {
+	kept := trades[:0]
+	for _, tr := range trades {
+		if tr == nil {
+			continue
+		}
+		// Not hash_id: it differs between the block scanner and the program
+		// watcher for the same trade (see model/solmodel/trademodel.go).
+		key := fmt.Sprintf("dataflow:seen_trade:%v:%s#%s#%s", tr.ChainId, tr.TxHash, tr.PairAddr, tr.Type)
+		fresh, err := t.redisClient.SetNX(ctx, key, 1, seenTradeTTL).Result()
+		if err != nil {
+			logc.Errorf(ctx, "dropSeenTrades: redis SetNX %s: %v", key, err)
+			fresh = true
+		}
+		if fresh {
+			kept = append(kept, tr)
+		}
+	}
+	if dropped := len(trades) - len(kept); dropped > 0 {
+		logc.Infof(ctx, "dropSeenTrades: skipped %d already-processed trades", dropped)
+	}
+	return kept
 }
