@@ -1,0 +1,3 @@
+target/
+keys/*.json
+!keys/optimized-program-keypair.json
