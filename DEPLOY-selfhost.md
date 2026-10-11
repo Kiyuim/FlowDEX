@@ -262,6 +262,22 @@ trade       Up                       8081/tcp
 websocket   Up                       0.0.0.0:8086->8086/tcp
 ```
 
+## 5.3 HTTPS（Let's Encrypt，可直接用 IP）
+
+```bash
+cd /opt/fun_dex_v2/deploy
+# .env 里设好 TLS_HOST（IP 或域名）、TLS_PROFILE、ACME_EMAIL
+./tls.sh        # 首次签发；之后重复执行只在快到期时续期
+(crontab -l 2>/dev/null; echo "17 3 * * * /opt/fun_dex_v2/deploy/tls.sh >> /var/log/fundex-tls.log 2>&1") | crontab -
+```
+
+- 云厂商安全组要放行 **TCP 443**。:80 只负责 ACME 验证和 301 跳转到 HTTPS。
+- **IP 证书**：`TLS_PROFILE=shortlived`，有效期约 6 天，cron 每天检查，剩 2 天时续期。
+  lego 必须带 `--disable-cn`（LE 拒绝 Common Name 里放 IP，报 `badCSR`）。
+- **域名证书**：`TLS_HOST=<域名>`、`TLS_PROFILE=`（默认 90 天）。
+- 有证书之后 `REACT_APP_WS_URL` / `REACT_APP_KLINE_WS_URL` 用 `wss://<TLS_HOST>`，
+  这样自托管页面和 Vercel 的 https 页面都能连上实时推送。
+
 ---
 
 ## 6. 验证（实测结果）

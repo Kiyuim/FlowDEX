@@ -3,11 +3,11 @@
   "rewrites": [
     {
       "source": "/direct-api/:path*",
-      "destination": "http://165.154.4.230/:path*"
+      "destination": "https://165.154.4.230/:path*"
     },
     {
       "source": "/v1/:path*",
-      "destination": "http://165.154.4.230/v1/:path*"
+      "destination": "https://165.154.4.230/v1/:path*"
     }
   ]
 }
