@@ -29,3 +29,10 @@ pump-tokens-ui/node_modules/
 pump-tokens-ui/build/
 pump-tokens-ui/.env*
 pump-tokens-ui/.vercel/
+
+# self-host kit (deploy/.env holds secrets) and contract sources
+deploy/
+contracts/
+**/.env
+*.key
+*.pem
