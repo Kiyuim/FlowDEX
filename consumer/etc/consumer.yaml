@@ -32,9 +32,8 @@ Mysql:
 
 Sol:
   ChainId: 100000
-  # Fallback/default only — public devnet RPC is heavily rate-limited. In
-  # production set SOL_NODE_URL / SOL_WSURL env vars (Railway secrets) to your
-  # own Helius endpoint; they override these and keep the API key out of git.
+  # Fallback only. Set HELIUS_API_KEY (Helius devnet is the default provider)
+  # or SOL_NODE_URL / SOL_WSURL to override these; keys stay out of git.
   NodeUrl:
     - "https://api.devnet.solana.com"
   WSUrl: "wss://api.devnet.solana.com"

@@ -47,6 +47,12 @@ func (c *Config) ApplyEnvOverrides() {
 	if v := c.KafkaPasswordEnv; v != "" {
 		c.KqSolTrades.Password = v
 	}
+	if k := strings.TrimSpace(c.Sol.HeliusApiKey); k != "" {
+		c.Sol.NodeUrl = []string{heliusDevnetRpc + k}
+		if c.Sol.WSUrl == "" || strings.Contains(c.Sol.WSUrl, "api.devnet.solana.com") {
+			c.Sol.WSUrl = heliusDevnetWs + k
+		}
+	}
 	nodeEnv := c.Sol.NodeUrlEnv
 	if v := strings.TrimSpace(c.Sol.ConsumerNodeUrlEnv); v != "" && !strings.Contains(v, "api.devnet.solana.com") {
 		nodeEnv = v
@@ -108,7 +114,15 @@ type Chain struct {
 	// trade service and the browser (slow/failed buys, expired blockhashes).
 	// Point it at its own key so indexing load never competes with trading.
 	ConsumerNodeUrlEnv string `json:"ConsumerNodeUrlEnv,optional,env=CONSUMER_SOL_NODE_URL"`
+	// HeliusApiKey makes Helius devnet the default RPC + WS when SOL_NODE_URL /
+	// SOL_WSURL are unset, so only the key (not full URLs) has to be provided.
+	HeliusApiKey string `json:"HeliusApiKey,optional,env=HELIUS_API_KEY"`
 }
+
+const (
+	heliusDevnetRpc = "https://devnet.helius-rpc.com/?api-key="
+	heliusDevnetWs  = "wss://devnet.helius-rpc.com/?api-key="
+)
 
 func SaveConf(cf Config) {
 	Cfg = cf

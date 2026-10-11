@@ -30,11 +30,19 @@ type ChainConfig struct {
 	// separated; when set it replaces NodeUrl (first URL is primary/tx-build).
 	// go-zero cannot env-bind a []string, so ApplyEnvOverrides folds it in.
 	NodeUrlEnv string `json:"NodeUrlEnv,optional,env=SOL_NODE_URL"`
+	// HeliusApiKey makes Helius devnet the default RPC when SOL_NODE_URL is
+	// unset, so only the key (not a full URL) has to be provided.
+	HeliusApiKey string `json:"HeliusApiKey,optional,env=HELIUS_API_KEY"`
 }
+
+const heliusDevnetRpc = "https://devnet.helius-rpc.com/?api-key="
 
 // ApplyEnvOverrides folds env-injected values that go-zero cannot bind directly
 // (e.g. slice fields) into the loaded config. Call once, right after conf.MustLoad.
 func (c *Config) ApplyEnvOverrides() {
+	if k := strings.TrimSpace(c.SolConfig.HeliusApiKey); k != "" {
+		c.SolConfig.NodeUrl = []string{heliusDevnetRpc + k}
+	}
 	if s := strings.TrimSpace(c.SolConfig.NodeUrlEnv); s != "" {
 		var urls []string
 		for _, part := range strings.Split(s, ",") {

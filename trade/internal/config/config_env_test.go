@@ -65,3 +65,20 @@ Sol:
 		t.Fatalf("end-to-end override failed: %#v", c.SolConfig.NodeUrl)
 	}
 }
+
+// HELIUS_API_KEY alone makes Helius devnet the RPC; SOL_NODE_URL still wins.
+func TestHeliusApiKeyDefault(t *testing.T) {
+	var c Config
+	c.SolConfig.NodeUrl = []string{"https://api.devnet.solana.com"}
+	c.SolConfig.HeliusApiKey = "K"
+	c.ApplyEnvOverrides()
+	if len(c.SolConfig.NodeUrl) != 1 || c.SolConfig.NodeUrl[0] != "https://devnet.helius-rpc.com/?api-key=K" {
+		t.Fatalf("helius default failed: %#v", c.SolConfig.NodeUrl)
+	}
+
+	c.SolConfig.NodeUrlEnv = "https://other"
+	c.ApplyEnvOverrides()
+	if len(c.SolConfig.NodeUrl) != 1 || c.SolConfig.NodeUrl[0] != "https://other" {
+		t.Fatalf("SOL_NODE_URL must override helius default: %#v", c.SolConfig.NodeUrl)
+	}
+}

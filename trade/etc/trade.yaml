@@ -14,6 +14,8 @@ Sol:
   #jito 不为空，就用jito地址来发送 (disabled for devnet)
   Jito: ""
   NodeUrl:
+    # Helius devnet is the default provider: set HELIUS_API_KEY and NodeUrl
+    # becomes https://devnet.helius-rpc.com/?api-key=<key>.
     # Fallback/default only. In production set the SOL_NODE_URL env var (a Railway
     # secret) to your Helius endpoint — it OVERRIDES this list and keeps the API
     # key out of git. Comma-separated; the first URL is primary (used by tx-build).
