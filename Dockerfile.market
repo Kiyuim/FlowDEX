@@ -1,11 +1,13 @@
 # Per-service image for Railway `market`. Matches the prod image
 # (golang:1.25 builder + debian:bookworm-slim runtime). market/ has multiple
 # `package main` files, so build the specific entrypoint file.
-FROM golang:1.25 AS build
+FROM --platform=$BUILDPLATFORM golang:1.25 AS build
+ARG TARGETARCH
 ENV GOPROXY=https://proxy.golang.org,direct
-ENV CGO_ENABLED=0 GOOS=linux
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./
+COPY vendor-patches ./vendor-patches
 RUN go mod download
 COPY . .
 RUN go build -ldflags="-s -w" -o /out/app ./market/market.go

@@ -1,11 +1,13 @@
 # Per-service image for Railway `trade`. Matches the proven prod image
 # (golang:1.25 builder + debian:bookworm-slim runtime). Builds only the trade
 # binary and runs it with its own etc/trade.yaml (Solana devnet; Jito disabled).
-FROM golang:1.25 AS build
+FROM --platform=$BUILDPLATFORM golang:1.25 AS build
+ARG TARGETARCH
 ENV GOPROXY=https://proxy.golang.org,direct
-ENV CGO_ENABLED=0 GOOS=linux
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./
+COPY vendor-patches ./vendor-patches
 RUN go mod download
 COPY . .
 RUN go build -ldflags="-s -w" -o /out/app ./trade/trade.go

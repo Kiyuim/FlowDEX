@@ -1,0 +1,30 @@
+Name: market.rpc
+# gateway/trade/consumer all dial market at market:8080 — it MUST listen on 8080.
+ListenOn: 0.0.0.0:8080
+
+Mysql:
+  Master:
+    Username: root
+    Password: ${MYSQL_ROOT_PASSWORD}
+    Path: mysql
+    Port: 3306
+    DBname: ${MYSQL_DATABASE}
+
+BizRedis:
+  Host: redis:6379
+  Pass: ""
+  Type: node
+  Key: bizRedis
+  PingTimeout: 10s
+  Tls: false
+
+# In-network Redpanda broker (plaintext, no SASL). Leaving Username/Password
+# unset selects the plaintext path in the kq client.
+KqSolTrades:
+  Name: web3fun-kafka
+  Brokers:
+    - kafka:9092
+  Group: web3-dex-market-selfhost
+  Topic: web3fun
+  Offset: last
+  MinBytes: 0

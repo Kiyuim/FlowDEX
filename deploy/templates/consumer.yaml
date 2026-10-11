@@ -1,0 +1,55 @@
+Name: consumer.rpc
+ListenOn: 0.0.0.0:8088
+
+Consumer:
+  # Parallel block-fetch workers. One block takes ~2s end-to-end (dominated by
+  # the getBlock RPC round trip), devnet produces ~2.5 blocks/s, so N workers
+  # sustain ~N/2 blocks/s. 6 keeps the indexer at the chain tip.
+  # Lower this to 2 if you are on the public devnet RPC and get rate-limited.
+  Concurrency: ${CONSUMER_CONCURRENCY}
+
+Mysql:
+  User: root
+  Password: ${MYSQL_ROOT_PASSWORD}
+  Host: mysql
+  Port: 3306
+  DBname: ${MYSQL_DATABASE}
+
+Sol:
+  ChainId: 100000
+  # SOL_NODE_URL / SOL_WSURL / HELIUS_API_KEY env vars (deploy/.env) override these at startup.
+  NodeUrl:
+    - "${SOL_NODE_URL}"
+  WSUrl: "${SOL_WS_URL}"
+
+Redis:
+  Host: redis:6379
+  Pass: ""
+  Type: node
+  Key: bizRedis
+  PingTimeout: 10s
+  Tls: false
+
+market_service:
+  target: market:8080
+  nonblock: true
+  timeout: 10000
+  transport: tcp
+  middlewares:
+    breaker: false
+
+trade_service:
+  target: trade:8081
+  nonblock: true
+  timeout: 100000
+  transport: tcp
+  middlewares:
+    breaker: false
+
+KqSolTrades:
+  Name: web3fun-kafka
+  Brokers:
+    - kafka:9092
+  Group: web3-dex-consumer-selfhost
+  Topic: web3fun
+  Offset: last

@@ -1,0 +1,29 @@
+# Per-service image for the Railway `dataflow` service. Matches the proven prod
+# image (golang:1.25 builder + debian:bookworm-slim runtime) used by the other
+# per-service Dockerfiles.
+#
+# dataflow consumes the `web3fun` Kafka topic produced by the consumer service,
+# aggregates trades into OHLC candles across 7 intervals, writes them to the
+# Railway-internal Redis (ZSET, hot) and MySQL (trade_kline_* shards, cold), and
+# PUBLISHes each update on the Redis `kline:updates` channel for the websocket
+# service to fan out.
+#
+# It has no public HTTP surface — the gRPC server on 8084 registers no methods.
+# Do NOT assign it a Railway domain; it is a worker.
+FROM --platform=$BUILDPLATFORM golang:1.25 AS build
+ARG TARGETARCH
+ENV GOPROXY=https://proxy.golang.org,direct
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY vendor-patches ./vendor-patches
+RUN go mod download
+COPY . .
+RUN go build -ldflags="-s -w" -o /out/app ./dataflow/dataflow.go
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates gettext-base && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=build /out/app /app/app
+COPY --from=build /src/dataflow/etc /app/etc
+CMD ["/app/app", "-f", "etc/dataflow.yaml"]

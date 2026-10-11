@@ -1,0 +1,36 @@
+Name: trade.rpc
+ListenOn: 0.0.0.0:8081
+Timeout: 30000  # 30s timeout for RPC requests
+
+simulate_only: false
+
+Sol:
+  ChainId: 100000
+  # Jito disabled on devnet.
+  Jito: ""
+  # NodeUrl must be non-empty for go-zero to parse the config; the SOL_NODE_URL
+  # env var (set in deploy/.env) overrides it via ApplyEnvOverrides at startup.
+  NodeUrl:
+    - "${SOL_NODE_URL}"
+  Enable: true
+  UUID: "e322635ed37c12a203af5f1e845278f26c2d46ca"
+
+market_service:
+  target: market:8080
+  nonblock: true
+  timeout: 100000
+  transport: tcp
+
+Mysql:
+  User: root
+  Password: ${MYSQL_ROOT_PASSWORD}
+  Host: mysql
+  Port: 3306
+  DBname: ${MYSQL_DATABASE}
+
+Redis:
+  Host: redis:6379
+  Pass: ""
+  Type: node
+  Key: bizRedis
+  PingTimeout: 10s

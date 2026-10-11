@@ -1,0 +1,192 @@
+# Self-hosted, single-server deployment of the full Fun DEX stack.
+#
+# Build context for every Go service is the REPO ROOT (..), because the
+# per-service Dockerfiles expect go.mod/go.sum at the context root.
+#
+# Service configs are NOT the ones baked into the images: deploy/config/*.yaml
+# (rendered from deploy/templates by render.sh) are bind-mounted over
+# /app/etc/*.yaml so the images stay identical to the Railway ones while the
+# endpoints point at compose DNS names (mysql / redis / kafka / market / trade).
+
+name: fundex
+
+services:
+  # ---------------------------------------------------------------- infra ---
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # The schema uses long VARCHAR keys; the default 3072-byte InnoDB limit is
+      # enough, but utf8mb4 + composite indexes get close. Keep row format DYNAMIC.
+      - --innodb-default-row-format=dynamic
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Redpanda = Kafka API. Pinned to a single shard (--smp 1): seastar sizes
+  # itself off the HOST's CPU count and demands AIO slots per shard, which
+  # /proc/sys/fs/aio-max-nr cannot supply on a normal box.
+  kafka:
+    image: redpandadata/redpanda:v24.2.7
+    restart: unless-stopped
+    entrypoint: ["/bin/bash", "-lc"]
+    # MUST be a single-element list. A plain string (or a `>` folded block) is
+    # shell-word-split by Compose, so `bash -lc` would get only "exec" as its
+    # script and the container would exit 0 immediately with no logs.
+    command:
+      - >
+        exec rpk redpanda start
+        --overprovisioned --smp 1 --memory 1G --reserve-memory 0M
+        --node-id 0 --check=false
+        --kafka-addr PLAINTEXT://0.0.0.0:9092
+        --advertise-kafka-addr PLAINTEXT://kafka:9092
+        --set redpanda.auto_create_topics_enabled=true
+    volumes:
+      - kafka-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  # ------------------------------------------------------------ backend ---
+  # market must be up before trade/consumer/gateway, which dial it at market:8080.
+  # It also self-provisions nothing — the consumer runs EnsureCoreSchema.
+  market:
+    build:
+      context: ..
+      dockerfile: Dockerfile.market
+    restart: unless-stopped
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      kafka: {condition: service_started}
+    volumes:
+      - ./config/market.yaml:/app/etc/market.yaml:ro
+    expose: ["8080"]
+
+  trade:
+    build:
+      context: ..
+      dockerfile: Dockerfile.trade
+    restart: unless-stopped
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      market: {condition: service_started}
+    environment:
+      # Folded into Sol.NodeUrl by ApplyEnvOverrides (go-zero cannot env-bind
+      # a []string). Comma-separated; first entry is primary.
+      SOL_NODE_URL: ${SOL_NODE_URL}
+      HELIUS_API_KEY: ${HELIUS_API_KEY}
+    volumes:
+      - ./config/trade.yaml:/app/etc/trade.yaml:ro
+    expose: ["8081"]
+
+  # consumer runs model/migration.EnsureCoreSchema on startup — it is what
+  # creates the tables in a fresh database.
+  consumer:
+    build:
+      context: ..
+      dockerfile: Dockerfile.consumer
+    restart: unless-stopped
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      kafka: {condition: service_started}
+      market: {condition: service_started}
+    environment:
+      SOL_NODE_URL: ${SOL_NODE_URL}
+      SOL_WSURL: ${SOL_WS_URL}
+      HELIUS_API_KEY: ${HELIUS_API_KEY}
+      CONSUMER_DISABLE_SLOT_SCANNER: ${CONSUMER_DISABLE_SLOT_SCANNER}
+      # Caps the shared getBlock rate limiter. Unset = unlimited.
+      SOL_BLOCK_RATE_PER_SEC: ${SOL_BLOCK_RATE_PER_SEC}
+    volumes:
+      - ./config/consumer.yaml:/app/etc/consumer.yaml:ro
+    expose: ["8088"]
+
+  dataflow:
+    build:
+      context: ..
+      dockerfile: Dockerfile.dataflow
+    restart: unless-stopped
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      kafka: {condition: service_started}
+    volumes:
+      - ./config/dataflow.yaml:/app/etc/dataflow.yaml:ro
+    expose: ["8084"]
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: Dockerfile.gateway
+    restart: unless-stopped
+    depends_on:
+      market: {condition: service_started}
+      trade: {condition: service_started}
+    volumes:
+      - ./config/gateway.yaml:/app/etc/gateway.yaml:ro
+    ports:
+      - "${GATEWAY_PORT}:8083"
+
+  websocket:
+    build:
+      context: ..
+      dockerfile: Dockerfile.websocket
+    restart: unless-stopped
+    depends_on:
+      redis: {condition: service_healthy}
+    volumes:
+      - ./config/websocket.yaml:/app/etc/websocket.yaml:ro
+    ports:
+      - "${WEBSOCKET_PORT}:8086"
+
+  # ----------------------------------------------------------- frontend ---
+  # CRA inlines REACT_APP_* at BUILD time, so the public host must be a build arg.
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+      args:
+        REACT_APP_WS_URL: ${REACT_APP_WS_URL}
+        REACT_APP_KLINE_WS_URL: ${REACT_APP_KLINE_WS_URL}
+        REACT_APP_SOLANA_RPC_URL: ${REACT_APP_SOLANA_RPC_URL}
+        REACT_APP_HELIUS_API_KEY: ${REACT_APP_HELIUS_API_KEY}
+        REACT_APP_SOLANA_RPC_FALLBACK_URL: ${REACT_APP_SOLANA_RPC_FALLBACK_URL}
+    restart: unless-stopped
+    depends_on:
+      gateway: {condition: service_started}
+      websocket: {condition: service_started}
+    ports:
+      - "${HTTP_PORT}:80"
+
+volumes:
+  mysql-data:
+  redis-data:
+  kafka-data:

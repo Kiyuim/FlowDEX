@@ -1,0 +1,38 @@
+Name: dataflow.rpc
+ListenOn: 0.0.0.0:8084
+
+# Same broker/topic the consumer produces to; only the Group differs so dataflow
+# tracks its own offsets independently of market's consumer.
+KqSol:
+  Name: web3fun-kafka
+  Brokers:
+    - kafka:9092
+  Group: web3-dataflow-selfhost
+  Topic: web3fun
+  Offset: last
+  Consumers: 1
+  Processors: 1
+
+# MySQL MUST match market's — dataflow writes the trade_kline_* shards and
+# market reads them. Different databases = candles never reach the API.
+Mysql:
+  Master:
+    Path: mysql
+    Port: 3306
+    Dbname: ${MYSQL_DATABASE}
+    Username: root
+    Password: ${MYSQL_ROOT_PASSWORD}
+    MaxIdleConns: 20
+    MaxOpenConns: 50
+
+# redis MUST match market's BizRedis and websocket's Redis. One instance:
+#   - dataflow writes kline:<chain>:<pair>:<interval> ZSETs
+#   - market reads them on the GetKline hot path
+#   - dataflow PUBLISHes kline:updates; websocket fans out to /ws/kline
+redis:
+  Host: redis:6379
+  Type: "node"
+  Pass: ""
+  Tls: false
+  Key: "10"
+  PingTimeout: 10s

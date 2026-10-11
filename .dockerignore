@@ -18,3 +18,5 @@ cmd/debugtools
 .vercel
 **/.vercel
 **/.env*
+
+contracts/

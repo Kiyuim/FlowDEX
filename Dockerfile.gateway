@@ -1,10 +1,12 @@
 # Per-service image for Railway `gateway` (HTTP->gRPC edge). Matches prod image
 # (golang:1.25 builder + debian:bookworm-slim runtime).
-FROM golang:1.25 AS build
+FROM --platform=$BUILDPLATFORM golang:1.25 AS build
+ARG TARGETARCH
 ENV GOPROXY=https://proxy.golang.org,direct
-ENV CGO_ENABLED=0 GOOS=linux
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./
+COPY vendor-patches ./vendor-patches
 RUN go mod download
 COPY . .
 RUN go build -ldflags="-s -w" -o /out/app ./gateway/gateway.go
@@ -14,6 +16,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 COPY --from=build /out/app /app/app
 COPY --from=build /src/gateway/etc /app/etc
+# ProtoSets: gateway.yaml references dex/gateway/internal/embed/pb/*.pb (relative
+# to the /app workdir). Without these the gateway falls back to gRPC reflection,
+# which fatals if an upstream doesn't serve reflection. Copy them in.
+COPY --from=build /src/gateway/internal/embed/pb /app/dex/gateway/internal/embed/pb
 # Public HTTP port — Railway routes the service domain to the EXPOSEd port.
 EXPOSE 8083
-CMD ["/app/app", "-f", "etc/gateway.yaml"]
+# Self-heal: go-zero's gateway fatals at startup if an upstream gRPC service is
+# momentarily unreachable (even with nonblock/ProtoSets). Restart the binary on
+# exit so a transient trade/market blip doesn't leave the gateway permanently
+# Crashed — it comes back on its own once the upstream is reachable again.
+CMD ["sh", "-c", "while true; do /app/app -f etc/gateway.yaml; echo 'gateway exited; restarting in 3s'; sleep 3; done"]
