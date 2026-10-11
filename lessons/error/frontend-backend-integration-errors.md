@@ -45,11 +45,11 @@ Failed to start server: listen tcp 0.0.0.0:8086: bind: address already in use
 
 ## 错误3：前端 WebSocket 连接 Mixed Content 错误
 
-**背景**：通过 HTTPS（https://web3ite.cab）访问前端时，WebSocket 连接失败。
+**背景**：通过 HTTPS（https://<your-domain>）访问前端时，WebSocket 连接失败。
 
 **错误**：
 ```
-Mixed Content: The page at 'https://web3ite.cab/' was loaded over HTTPS, 
+Mixed Content: The page at 'https://<your-domain>/' was loaded over HTTPS, 
 but attempted to connect to the insecure WebSocket endpoint 'ws://118.194.235.63:8086/ws/tokens?chain_id=100000'. 
 This request has been blocked; this endpoint must be available over WSS.
 ```
@@ -61,16 +61,16 @@ This request has been blocked; this endpoint must be available over WSS.
 
 **方案**：
 1. 更新前端 WebSocket 连接逻辑，根据页面协议选择正确的 WebSocket 协议：
-   - HTTPS 页面：使用 `wss://web3ite.cab/direct-api/ws/tokens`
+   - HTTPS 页面：使用 `wss://<your-domain>/direct-api/ws/tokens`
    - localhost：使用 `ws://localhost:8086/ws/tokens`
-2. 配置 Nginx 反向代理 WebSocket，将 `wss://web3ite.cab/direct-api/ws/*` 代理到 `ws://localhost:8086/ws/*`
+2. 配置 Nginx 反向代理 WebSocket，将 `wss://<your-domain>/direct-api/ws/*` 代理到 `ws://localhost:8086/ws/*`
 3. 在 Nginx 配置中添加 WebSocket 支持的头信息（Upgrade, Connection）
 
 ---
 
 ## 错误4：Nginx WebSocket 代理配置缺失
 
-**背景**：前端尝试通过 `wss://web3ite.cab/direct-api/ws/tokens` 连接 WebSocket，但连接失败。
+**背景**：前端尝试通过 `wss://<your-domain>/direct-api/ws/tokens` 连接 WebSocket，但连接失败。
 
 **错误**：WebSocket 连接无法建立，返回 404 或连接被拒绝。
 
@@ -254,7 +254,7 @@ Backend log: "3333 pairInfo.Fdv is 0"
 ## 相关文件
 
 - PM2 配置：`/home/ubuntu/dex_full/fun_dex_v2/ecosystem.config.js`
-- Nginx 配置：`/etc/nginx/sites-available/web3ite.cab`
+- Nginx 配置：`/etc/nginx/sites-available/<your-domain>`
 - WebSocket Hook：`/home/ubuntu/dex_full/fun_dex_v2/pump-tokens-ui/src/hooks/useTokenListWebSocket.js`
 - 交易逻辑：`/home/ubuntu/dex_full/fun_dex_v2/trade/internal/logic/createmarketorderlogic.go`
 - Gateway 错误处理：`/home/ubuntu/dex_full/fun_dex_v2/gateway/middleware/response.go`

@@ -9,7 +9,7 @@ ListenOn: 0.0.0.0:8080
 # Mysql:
 #   Master:
 #     Username: root
-#     Password: web3ite.fun
+#     Password: fundex_local
 #     Path: localhost
 #     Port: 3306
 #     Dbname: fun_dexs

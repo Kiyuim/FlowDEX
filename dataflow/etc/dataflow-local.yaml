@@ -22,7 +22,7 @@ Mysql:
     Port: 3307
     Dbname: flowdex # Database name in docker-compose
     Username: root
-    Password: web3ite.fun # Corresponds to the password in docker-compose.yml
+    Password: fundex_local # Corresponds to the password in docker-compose.yml
     MaxIdleConns: 20
     MaxOpenConns: 50
 

@@ -30,7 +30,7 @@ print_header() {
 }
 
 # Database configuration (matching your current setup)
-DB_PASSWORD="web3ite.fun"
+DB_PASSWORD="fundex_local"
 DB_NAME="fun_dexs"
 
 # Main execution

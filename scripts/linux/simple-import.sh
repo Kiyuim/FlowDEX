@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Simple MySQL import script
-DB_CONN="mysql -hlocalhost -P3306 -uroot -pweb3ite.fun fun_dexs"
+DB_CONN="mysql -hlocalhost -P3306 -uroot -pfundex_local fun_dexs"
 
 echo "Starting database import..."
 echo "Found $(find docker/fun_dexs -name "*.sql" | wc -l) SQL files"

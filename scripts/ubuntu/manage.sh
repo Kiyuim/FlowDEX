@@ -101,9 +101,9 @@ case "$1" in
         
         # 检查数据库
         echo "检查数据库连接："
-        if docker exec mysql-db mysql -u root -p'web3ite.fun' -e "SELECT 1;" >/dev/null 2>&1; then
+        if docker exec mysql-db mysql -u root -p'fundex_local' -e "SELECT 1;" >/dev/null 2>&1; then
             echo -e "\033[0;32m[✓]\033[0m MySQL 数据库连接正常"
-            local pump_count=$(docker exec mysql-db mysql -u root -p'web3ite.fun' -e "USE fun_dexs; SELECT COUNT(*) FROM pair WHERE name='PumpFun';" 2>/dev/null | tail -1)
+            local pump_count=$(docker exec mysql-db mysql -u root -p'fundex_local' -e "USE fun_dexs; SELECT COUNT(*) FROM pair WHERE name='PumpFun';" 2>/dev/null | tail -1)
             if [ "$pump_count" -gt 0 ]; then
                 echo -e "\033[0;32m[✓]\033[0m PumpFun 数据已采集 ($pump_count 条记录)"
             else

@@ -15,7 +15,7 @@ Consumer:
 
 # Mysql:
 #   User: root
-#   Password: web3ite.fun
+#   Password: fundex_local
 #   Host: localhost
 #   Port: 3306
 #   DBname: fun_dexs

@@ -33,7 +33,7 @@ print_header() {
 DB_HOST="localhost"
 DB_PORT="3306"
 DB_USER="root"
-DB_PASSWORD="web3ite.fun"
+DB_PASSWORD="fundex_local"
 DB_NAME="fun_dexs"
 SQL_DIR="docker/fun_dexs"
 

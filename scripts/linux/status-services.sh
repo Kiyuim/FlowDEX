@@ -178,7 +178,7 @@ check_service_status() {
 check_mysql_connection() {
     print_header "MySQL Database Status"
     
-    local mysql_cmd="mysql -hlocalhost -P3306 -uroot -pweb3ite.fun fun_dexs"
+    local mysql_cmd="mysql -hlocalhost -P3306 -uroot -pfundex_local fun_dexs"
     
     if systemctl is-active --quiet mysql 2>/dev/null; then
         print_running "MySQL service is running"

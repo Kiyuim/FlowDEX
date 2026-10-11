@@ -18,9 +18,8 @@ logs/
 # OS
 .DS_Store
 
-# Never commit private keys / certs (found web3ite.cab.key + cert chain
-# checked into the working tree — real TLS private key for a live domain,
-# must never enter git history)
+# Never commit private keys / certs. TLS for the self-hosted stack is issued
+# on the server by deploy/tls.sh (Let's Encrypt) and never lives in git.
 *.key
 *.pem
 *.p12
